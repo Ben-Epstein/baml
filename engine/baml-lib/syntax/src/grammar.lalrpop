@@ -69,6 +69,13 @@ PipeSep<T>: Vec<T> = {
     }
 }
 
+CommaSep<T>: Vec<T> = {
+    <mut v:(<T> ",")+> <e:T> => {
+        v.push(e);
+        v
+    }
+}
+
 pub Type: Type<Span> = WithPos<BareType>;
 
 BasicType: Type<Span> = {
@@ -128,3 +135,22 @@ pub BareType: Type<Span> = {
     UnionType,   
 };
 
+LLMFunction: LLMFunction<Span> = {
+  "function" <name:Identifier> "(" <args: CommaSep<Argument>> ")" "->" <return_type:Type> "{" <body:LLMFunctionBody> "}" => {
+    return LLMFunction { name, args, return_type, body }
+  }
+};
+
+LLMFunctionBody: LLMFunctionBody<Span> = {
+  "client" <client: Identifier> "\n" "prompt" <prompt: RawString> => {
+    return LLMFunctionBody { client, prompt }
+  }
+}
+
+Argument: Argument<Span> = {
+  <name: Identifier> ":" <r#type: Type> => { return Argument { name, r#type } }
+}
+
+RawString: Expression<Span> = {
+  "#\"\"" <contents:r##"#"(?!#").*"#"#=> { return Expression::RawString { inner: contents } }
+}

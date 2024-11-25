@@ -6,5 +6,7 @@ use crate::pos::WithPos;
 // TODO: Fill this out.
 #[derive(Clone, Debug)]
 pub enum Expression<T> {
-    Variable{ identifier: Identifier<T> }
+    Variable{ identifier: Identifier<T> },
+    QuotedString { inner: String },
+    RawString { inner: String },
 }
