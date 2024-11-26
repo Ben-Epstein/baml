@@ -60,15 +60,20 @@ pub(crate) fn parse_value_expr(
     }
 }
 
+/// Sort all attributes on a field into either field attributes or type attributes.
+/// The name of the attribute fully determines whether it will be associated with
+/// the field, or with the type.
 fn reassociate_type_attributes(field_attributes: &mut Vec<Attribute>, field_type: &mut FieldType) {
     let mut all_attrs = field_type.attributes().to_owned();
     all_attrs.append(field_attributes);
-    let (attrs_for_type, attrs_for_field): (Vec<Attribute>, Vec<Attribute>) = all_attrs
+    let (attrs_for_type, attrs_for_field): (Vec<_>, Vec<_>) = all_attrs
         .into_iter()
-        .partition(|attr| ["assert", "check"].contains(&attr.name()));
-    field_type.set_attributes(attrs_for_type);
+        .partition(|attr| TYPE_ATTRIBUTE_NAMES.contains(&attr.name()));
+    field_type.set_attributes(attrs_for_type.clone());
     *field_attributes = attrs_for_field;
 }
+
+const TYPE_ATTRIBUTE_NAMES: [&str; 4] = ["assert", "check", "streaming::done", "streaming::state"];
 
 pub(crate) fn parse_type_expr(
     model_name: &Option<Identifier>,
@@ -102,11 +107,13 @@ pub(crate) fn parse_type_expr(
         }
     }
 
+    eprintln!("Before name: {name:?}\nfield_type: {field_type:?}\nfield_attrs:{field_attributes:?}");
     // Strip certain attributes from the field and attach them to the type.
     match field_type.as_mut() {
         None => {}
         Some(ft) => reassociate_type_attributes(&mut field_attributes, ft),
     }
+    eprintln!("After.\nfield_type: {field_type:?}\nfield_attrs:{field_attributes:?}\n");
 
     match (name, &field_type) {
         // Class field.

@@ -405,8 +405,102 @@ enum Stock {
   APPL,
   MSFT,
   GOOG,
-  BDML,
+  BAML,
 }
 
-class Message {}
+// Make recommendations atomic - we do not want a recommendation to be
+// modified by streaming additional messages.
+class Recommendation {
+  stock Stock
+  amount float
+  action "buy" | "sell"
+  @@streaming::done
+}
+
+class Message {
+  message_type "greeting" | "conversation" | "farewell" @streaming::needed
+  message string @streaming::state @streaming::needed
+}
+
+function Respond(
+  history: (Message | Recommendation | UserMessage)[]
+) -> Message | Recommendation { ... }
 ```
+
+<Tabs>
+
+<Tab title="Python">
+The above BAML code will generate the following Python definitions in the
+`partial` module. The use of streaming attributes has several effects on
+the generated code:
+
+ - `Recommendation` does not have any partial field because it was marked
+   `@streaming::done`.
+ - The `Message.message` `string` is wrapped in `StreamingState`, allowing
+   runtime checking of its completion status. This status could be used
+   to render a spinner as the message streams in.
+ - The `Message.message_type` field may not be `null`, because it was marked
+   as `@streaming::needed`.
+
+```python
+class StreamingState(BaseModel, Generic[T]):
+  value: T,
+  state: Union[Literal["incomplete"] | Literal[]]
+
+class Stock(str, Enum):
+    APPL = "APPL"
+    MSFT = "MSFT"
+    GOOG = "GOOG"
+    BAML = "BAML"
+
+class Recommendation(BaseClass):
+    stock: Stock
+    amount: float
+    action: Union[Literal["buy"], Literal["sell"]]
+
+class Message(BaseClass):
+  message_type: Union[Literal["gretting"], Literal["conversation"], Literal["farewell"]]
+  message: StreamingState[string]
+```
+</Tab>
+
+<Tab title="Typescript">
+The above BAML code will generate the following Typescript definitions in the
+`partial` module. The use of streaming attributes has several effects on
+the generated code:
+
+ - `Recommendation` does not have any partial field because it was marked
+   `@streaming::done`.
+ - The `Message.message` `string` is wrapped in `StreamingState`, allowing
+   runtime checking of its completion status. This status could be used
+   to render a spinner as the message streams in.
+ - The `Message.message_type` field may not be `null`, because it was marked
+   as `@streaming::needed`.
+
+```typescript
+export interface StreamingState<T> {
+  value: T,
+  state: "incomplete" | "complete"
+}
+
+export enum Category {
+  APPL = "APPl",
+  MSFT = "MSFT",
+  GOOG = "GOOG",
+  BAML = "BAML",
+}
+
+export interface Recommendation {
+  stock: Stock,
+  amount: float,
+  action: "buy" | "sell"
+}
+
+export interface Message {
+  message_type: "gretting" | "conversation" | "farewell"
+  message: StreamingState<string>
+}
+```
+</Tab>
+
+</Tabs>

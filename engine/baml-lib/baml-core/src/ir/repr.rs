@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::{anyhow, Result};
-use baml_types::{Constraint, ConstraintLevel, FieldType, StringOr, UnresolvedValue};
+use baml_types::{Constraint, ConstraintLevel, FieldType, Resolvable, StringOr, UnresolvedValue};
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_parser_database::{
@@ -11,7 +11,7 @@ use internal_baml_parser_database::{
     },
     Attributes, ParserDatabase, PromptAst, RetryPolicyStrategy,
 };
-use internal_baml_schema_ast::ast::{SubType, ValExpId};
+use internal_baml_schema_ast::ast::{Attribute, SubType, ValExpId};
 
 use baml_types::JinjaExpression;
 use internal_baml_schema_ast::ast::{self, FieldArity, WithName, WithSpan};
@@ -260,6 +260,9 @@ fn to_ir_attributes(
             dynamic_type,
             skip,
             constraints,
+            streaming_done,
+            streaming_needed,
+            streaming_state,
         } = attributes;
 
         let description = description
@@ -284,11 +287,49 @@ fn to_ir_attributes(
                 None
             }
         });
+        let streaming_done = streaming_done.as_ref().and_then(|v| {
+            if *v {
+                Some((
+                    "streaming::done".to_string(),
+                    UnresolvedValue::Bool(true, ()),
+                ))
+            } else {
+                None
+            }
+        });
+        let streaming_needed = streaming_needed.as_ref().and_then(|v| {
+            if *v {
+                Some((
+                    "streaming::needed".to_string(),
+                    UnresolvedValue::Bool(true, ()),
+                ))
+            } else {
+                None
+            }
+        });
+        let streaming_state = streaming_state.as_ref().and_then(|v| {
+            if *v {
+                Some((
+                    "streaming::state".to_string(),
+                    UnresolvedValue::Bool(true, ()),
+                ))
+            } else {
+                None
+            }
+        });
 
-        let meta = vec![description, alias, dynamic_type, skip]
-            .into_iter()
-            .flatten()
-            .collect();
+        let meta = vec![
+            description,
+            alias,
+            dynamic_type,
+            skip,
+            streaming_done,
+            streaming_needed,
+            streaming_state,
+        ]
+        .into_iter()
+        .filter_map(|s| s)
+        .collect();
         (meta, constraints.clone())
     })
 }
@@ -331,7 +372,7 @@ fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
 impl WithRepr<FieldType> for ast::FieldType {
     // TODO: (Greg) This code only extracts constraints, and ignores any
     // other types of attributes attached to the type directly.
-    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let constraints = self
             .attributes()
             .iter()
@@ -364,8 +405,27 @@ impl WithRepr<FieldType> for ast::FieldType {
                 })
             })
             .collect::<Vec<Constraint>>();
+        let mut meta = IndexMap::new();
+        if self
+            .attributes()
+            .iter()
+            .find(|Attribute { name, .. }| name.name() == "streaming::done")
+            .is_some()
+        {
+            let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
+            meta.insert("streaming::done".to_string(), val);
+        }
+        if self
+            .attributes()
+            .iter()
+            .find(|Attribute { name, .. }| name.name() == "streaming::state")
+            .is_some()
+        {
+            let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
+            meta.insert("streaming::state".to_string(), val);
+        }
         let attributes = NodeAttributes {
-            meta: IndexMap::new(),
+            meta,
             constraints,
             span: Some(self.span().clone()),
         };
@@ -374,8 +434,9 @@ impl WithRepr<FieldType> for ast::FieldType {
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
-        let constraints = WithRepr::attributes(self, db).constraints;
-        let has_constraints = !constraints.is_empty();
+        let attributes = WithRepr::attributes(self, db);
+        // let constraints = WithRepr::attributes(self, db).constraints;
+        let has_constraints = !attributes.constraints.is_empty();
         let base = match self {
             ast::FieldType::Primitive(arity, typeval, ..) => {
                 let repr = FieldType::Primitive(*typeval);
@@ -469,7 +530,7 @@ impl WithRepr<FieldType> for ast::FieldType {
         let with_constraints = if has_constraints {
             FieldType::Constrained {
                 base: Box::new(base.clone()),
-                constraints,
+                constraints: attributes.constraints,
             }
         } else {
             base
@@ -622,19 +683,17 @@ impl WithRepr<Field> for FieldWalker<'_> {
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<Field> {
+        let ast_field_type = self.ast_field().expr.as_ref().ok_or(anyhow!(
+            "Internal error occurred while resolving repr of field {:?}",
+            self.name(),
+        ))?;
+        let field_type_attributes = WithRepr::attributes(ast_field_type, db);
+        let field_type = ast_field_type.repr(db)?;
         Ok(Field {
             name: self.name().to_string(),
             r#type: Node {
-                elem: self
-                    .ast_field()
-                    .expr
-                    .clone()
-                    .ok_or(anyhow!(
-                        "Internal error occurred while resolving repr of field {:?}",
-                        self.name(),
-                    ))?
-                    .repr(db)?,
-                attributes: self.attributes(db),
+                elem: field_type,
+                attributes: field_type_attributes,
             },
             docstring: self.get_documentation().map(Docstring),
         })
@@ -1201,5 +1260,56 @@ mod tests {
         let function = ir.find_function("Foo").unwrap();
         let walker = ir.find_test(&function, "Foo").unwrap();
         assert_eq!(walker.item.1.elem.constraints.len(), 1);
+    }
+
+    #[test]
+    fn test_streaming_attributes() {
+        let ir = make_test_ir(
+            r##"
+            class Foo {
+              foo_int int @streaming::needed
+              foo_bool bool @streaming::state
+              foo_list int[] @streaming::done
+            }
+
+            class Bar {
+              name string @streaming::done
+              message string
+              @@streaming::done
+            }
+        "##,
+        )
+        .unwrap();
+        let foo = ir.find_class("Foo").unwrap();
+        assert!(!foo.streaming_done());
+        match foo.walk_fields().collect::<Vec<_>>().as_slice() {
+            [field1, field2, field3] => {
+                let type1 = &field1.item.elem.r#type;
+                assert!(field1.streaming_needed());
+                assert!(type1.attributes.get("streaming::needed").is_none());
+                let type2 = &field2.item.elem.r#type;
+                assert!(!field2.streaming_state());
+                assert!(type2.attributes.get("streaming::state").is_some());
+                let type3 = &field3.item.elem.r#type;
+                assert!(!field3.streaming_done());
+                assert!(type3.attributes.get("streaming::done").is_some());
+            }
+            _ => panic!("Expected exactly 3 fields"),
+        }
+        let bar = ir.find_class("Bar").unwrap();
+        assert!(bar.streaming_done());
+        match bar.walk_fields().collect::<Vec<_>>().as_slice() {
+            [field1, field2] => {
+                assert!(!field1.streaming_done());
+                assert!(field1
+                    .item
+                    .elem
+                    .r#type
+                    .attributes
+                    .get("streaming::done")
+                    .is_some());
+            }
+            _ => panic!("Expected exactly 2 fields"),
+        }
     }
 }
