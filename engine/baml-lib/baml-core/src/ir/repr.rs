@@ -267,6 +267,9 @@ fn to_ir_attributes(
             dynamic_type,
             skip,
             constraints,
+            streaming_done,
+            streaming_needed,
+            streaming_state,
         } = attributes;
 
         let description = description
@@ -291,8 +294,29 @@ fn to_ir_attributes(
                 None
             }
         });
+        let streaming_done = streaming_done.as_ref().and_then(|v| {
+            if *v {
+                Some(("streaming::done".to_string(), UnresolvedValue::Bool(true, ())))
+            } else {
+                None
+            }
+        });
+        let streaming_needed = streaming_needed.as_ref().and_then(|v| {
+            if *v {
+                Some(("streaming::needed".to_string(), UnresolvedValue::Bool(true, ())))
+            } else {
+                None
+            }
+        });
+        let streaming_state = streaming_state.as_ref().and_then(|v| {
+            if *v {
+                Some(("streaming::state".to_string(), UnresolvedValue::Bool(true, ())))
+            } else {
+                None
+            }
+        });
 
-        let meta = vec![description, alias, dynamic_type, skip]
+        let meta = vec![description, alias, dynamic_type, skip, streaming_done, streaming_needed, streaming_state]
             .into_iter()
             .filter_map(|s| s)
             .collect();
@@ -1202,5 +1226,44 @@ mod tests {
         let function = ir.find_function("Foo").unwrap();
         let walker = ir.find_test(&function, "Foo").unwrap();
         assert_eq!(walker.item.1.elem.constraints.len(), 1);
+    }
+
+    #[test]
+    fn test_streaming_attributes() {
+        let ir = make_test_ir(
+            r##"
+            class Foo {
+              foo_int int @streaming::needed
+              foo_bool bool @streaming::state
+              foo_list int[] @streaming::done
+            }
+
+            class Bar {
+              name string @streaming::done
+              message string
+              @@streaming::done
+            }
+        "##,
+        )
+        .unwrap();
+        let foo = ir.find_class("Foo").unwrap();
+        assert!(!foo.streaming_done());
+        match foo.walk_fields().collect::<Vec<_>>().as_slice() {
+            [field1, field2, field3] => {
+                assert!(field1.streaming_needed());
+                assert!(field2.streaming_state());
+                assert!(field3.streaming_done());
+            },
+            _ => panic!("Expected exactly 3 fields")
+        }
+        let bar = ir.find_class("Bar").unwrap();
+        assert!(bar.streaming_done());
+        match bar.walk_fields().collect::<Vec<_>>().as_slice() {
+            [field1, field2] => {
+                assert!(!field1.streaming_done());
+                assert(field1.item.elem.r#type.attributes.get("streamming"))
+            },
+            _ => panic!("Expected exactly 2 fields")
+        }
     }
 }

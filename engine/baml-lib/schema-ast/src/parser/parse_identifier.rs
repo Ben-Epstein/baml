@@ -15,6 +15,7 @@ pub fn parse_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identi
     if let Some(inner) = pair.into_inner().next() {
         return match inner.as_rule() {
             Rule::path_identifier => parse_path_identifier(inner, diagnostics),
+            Rule::namespaced_identifier => parse_namespaced_identifier(inner, diagnostics),
             Rule::single_word => parse_single_word(inner, diagnostics),
             _ => unreachable_rule!(inner, Rule::identifier),
         };
@@ -63,4 +64,13 @@ fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Ident
         },
         span,
     );
+}
+
+/// Parse an identifier of the form `word::word::word` directly into a that string.
+/// TODO: `Identifier` should eventually store the namespace components
+/// individually.
+fn parse_namespaced_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
+    assert_correct_parser!(pair, Rule::namespaced_identifier);
+    let span = diagnostics.span(pair.as_span());
+    Identifier::from((pair.as_str(), span))
 }

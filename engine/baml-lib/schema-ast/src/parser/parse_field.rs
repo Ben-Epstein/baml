@@ -60,15 +60,20 @@ pub(crate) fn parse_value_expr(
     }
 }
 
+/// Sort all attributes on a field into either field attributes or type attributes.
+/// The name of the attribute fully determines whether it will be associated with
+/// the field, or with the type.
 fn reassociate_type_attributes(field_attributes: &mut Vec<Attribute>, field_type: &mut FieldType) {
     let mut all_attrs = field_type.attributes().to_owned();
     all_attrs.append(field_attributes);
-    let (attrs_for_type, attrs_for_field): (Vec<Attribute>, Vec<Attribute>) = all_attrs
+    let (attrs_for_type, attrs_for_field): (Vec<_>, Vec<_>) = all_attrs
         .into_iter()
-        .partition(|attr| ["assert", "check"].contains(&attr.name()));
+        .partition(|attr| TYPE_ATTRIBUTE_NAMES.contains(&attr.name()));
     field_type.set_attributes(attrs_for_type);
     *field_attributes = attrs_for_field;
 }
+
+const TYPE_ATTRIBUTE_NAMES: [&str; 3] = ["assert", "check", "streaming::atomic"];
 
 pub(crate) fn parse_type_expr(
     model_name: &Option<Identifier>,
