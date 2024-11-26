@@ -12,14 +12,15 @@ If you tried streaming in a JSON output from an LLM you'd see something like:
 {"items": [{"name": "Apple", "quantity": 2, "price": 1.50}], "total_cost": 3.00} # Completed
 ```
 
-BAML automatically fixes this partial JSON, and transforms all your types into `Partial` types with all `Optional` fields only during the stream.
+BAML gives you fine-grained control of how it fixes this partial JSON and transforms
+it into a series of semantically valid partial objects.
 
 <Tip>You can check out more examples (including streaming in FastAPI and NextJS) in the [BAML Examples] repo.</Tip>
 
 [call BAML functions]: /docs/calling-baml/calling-functions
 [BAML Examples]: https://github.com/BoundaryML/baml-examples/tree/main
 
-Lets stream the output of this function `function ExtractReceiptInfo(email: string) -> ReceiptInfo` for our example:
+Let's stream the output of this function `function ExtractReceiptInfo(email: string) -> ReceiptInfo` for our example:
 
 <Accordion title="extract-receipt-info.baml">
 
@@ -48,6 +49,14 @@ function ExtractReceiptInfo(email: string) -> ReceiptInfo {
 }
 ```
 </Accordion>
+
+The BAML code generator creates a set of types in the `baml_client` library
+in a module called `partial` in `baml_client`. These types are modified
+from your original types to support streaming.
+
+By default, BAML will convert all Class fields into nullable fields, and
+fill those fields with non-null values as much as possible given the tokens
+received so far.
 
 <Tabs>
 
@@ -253,5 +262,151 @@ Streaming is not yet supported via OpenAPI, but it will be coming soon!
 </Tabs>
 
 <Note>
-Number fields are always streamed in only when the LLM completes them. E.g. if the final number is 129.95, you'll only see null or 129.95 instead of partial numbers like 1, 12, 129.9, etc.
+Number fields are always streamed in only when the LLM completes them. E.g. if
+the final number is 129.95, you'll only see null or 129.95 instead of partial
+numbers like 1, 12, 129.9, etc.
 </Note>
+
+## Semantic Streaming
+
+The BAML language provides several attributes that can be attached to types
+to control streaming behavior, ensuring that the partial values streamed to you
+are always valid within your own semantics.
+
+  - `@streaming::done`: Marks a type that should only be streamed when it is
+    done being read from the LLM response.
+  - `@streaming::needed`: Marks a field to indicate that the class containing
+     that field should only be streamed if that field is present (the field needed
+     not be completed)
+  - `@streaming::state`: Adds metadata to a type indicating whether types appearing
+    
+### `@streaming::done`
+
+To demonstrate the use of `@streaming::done`, imagine that a `ReceiptItem`
+must only be consider valid and can only reach the client when its `name`,
+`description`, `quantity` and `price` fields are completely streamed in.
+To achieve this we can annotate the `ReceiptItem` class with the
+`@streaming::done` attribute:
+
+```rust
+class ReceiptItem {
+  name string
+  description string?
+  quantity int
+  price float
+  @@streaming::done
+}
+```
+
+When generating the client code for `ReceiptType` none of the fields of
+`ReceiptItem` will be converted to optional. And when parsing an LLM response,
+no `ReceiptItem` will be streamed out until all of its fields are done being
+streamed in.
+
+### `@streaming::needed`
+
+Sometimes the presence of a value is important to the correct interpretation
+of a containing value. This commonly occurs with tags used to determine which
+part of a union is being used.
+
+For example, in this code block, `@streaming::needed` on each of the
+`message_type` fields will ensure that an `Event` is never streamed until
+enough tokens have been received to precisely know what the message type is,
+allowing you to build UI appropriate to the message type before the other
+fields have been completed.
+
+```rust
+class Message {
+  message_type "greeting" | "within-convo" | "farewell" @streaming::needed
+  gesture ("gesticulate" | "wave" | "shake-hands" | "hug")?
+  message string
+}
+
+class Event {
+  event_message: Message
+  speaker string
+}
+
+function Chat(history: Event[]) -> Event { ... }
+```
+
+<Tip>
+You might wonder if it's sufficient to use `@streaming::done` on the
+`message_type` field. `@streaming::done` applies to types, preventing them
+from streaming out until they are completed. On the other hand,
+`@streaming::needed` applies to fields and prevents a containing object
+from streaming out until that field is present.
+
+A type with `@streaming::done` on it will still be converted to a
+nullable field in the generated partial types, so this change would not
+produce the desired result of witholding a `Message` until its type is
+known. Messages would be streamed with `message_type: null`.
+
+This is a subtle distinction between `@streaming::done` and
+`@streaming::needed`. As a rule of thumb, remember that `@streaming::done`
+is about the type itself, and `@streaming::needed` is about the type's
+containing context.
+</Tip>
+
+### `@streaming::state`
+
+It is often useful to know in client code whether a value is finished, or
+could be updated in future messages. The `@streaming::state` attribute lets
+you attach metadata to types to indicate this state in client code.
+
+<Tabs>
+<Tab title="BAML">
+```rust
+class Message {
+  message_type "greeting" | "within-convo" | "farewell" @streaming::needed
+  gesture ("gesticulate" | "wave" | "shake-hands" | "hug")?
+  message string @streaming::state
+}
+```
+</Tab>
+<Tab title="Python">
+```python
+class StreamingState(BaseModel, Generic[T]):
+  value: T,
+  state: "incomplete" | "complete"
+
+class Message(BaseModel):
+  message_type: Union["greeting", "within-convo", "farewell"]
+  gesture: Option[Union["gesticulate", "wave", "shake-hands", "hug"]]
+  message: StreamingState[String]
+```
+</Tab>
+
+<Tab title="Typescript">
+```typescript
+interface StreamingState<T> {
+  value: T,
+  state: "incomplete" | "complete"
+}
+
+interface Message {
+  message_type: "greeting" | "within-convo" | "farewell",
+  gesture: ("gesticulate" | "wave" | "shake-hands" | "hug")?,
+  message: StreamingState<string>,
+}
+```
+</Tab>
+
+</Tabs>
+
+## Putting it all together
+
+Let's put all of these concepts together to design an application that
+streams a conversation containing stock recommendations, using semantic
+streaming to ensure that the streamed data obeys our domain's invariants.
+
+```rust
+enum Stock {
+  APPL,
+  MSFT,
+  GOOG,
+  BDML,
+}
+
+class Message {}
+```
