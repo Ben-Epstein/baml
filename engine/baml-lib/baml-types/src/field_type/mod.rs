@@ -3,6 +3,22 @@ use crate::Constraint;
 
 mod builder;
 
+pub type FieldType = TypeWithMeta<TypeMetadata>;
+
+/// FieldType represents the type of either a class field or a function arg.
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+pub enum TypeWithMeta<T> {
+    Primitive(TypeValue, T),
+    Enum(String, T),
+    Literal(LiteralValue, T),
+    Class(String, T),
+    List(Box<TypeWithMeta<T>>, T),
+    Map(Box<TypeWithMeta<T>>, Box<TypeWithMeta<T>>, T),
+    Union(Vec<TypeWithMeta<T>>, T),
+    Tuple(Vec<TypeWithMeta<T>>, T),
+    Optional(Box<TypeWithMeta<T>>, T),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub enum TypeValue {
     String,
@@ -70,34 +86,48 @@ impl std::fmt::Display for LiteralValue {
     }
 }
 
-/// FieldType represents the type of either a class field or a function arg.
 #[derive(serde::Serialize, Debug, Clone, PartialEq)]
-pub enum FieldType {
-    Primitive(TypeValue),
-    Enum(String),
-    Literal(LiteralValue),
-    Class(String),
-    List(Box<FieldType>),
-    Map(Box<FieldType>, Box<FieldType>),
-    Union(Vec<FieldType>),
-    Tuple(Vec<FieldType>),
-    Optional(Box<FieldType>),
-    Constrained {
-        base: Box<FieldType>,
-        constraints: Vec<Constraint>,
-    },
+pub struct StreamingBehavior {
+    pub done: bool,
+    pub needed: bool,
+    pub state: bool,
 }
+
+impl Default for StreamingBehavior {
+    fn default() -> Self {
+        StreamingBehavior {
+            done: false,
+            needed: false,
+            state: false,
+        }
+    }
+}
+
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+pub struct TypeMetadata {
+    pub constraints: Vec<Constraint>,
+    pub streaming_behavior: StreamingBehavior,
+}
+impl Default for TypeMetadata {
+    fn default() -> Self {
+        TypeMetadata {
+            constraints: Vec::new(),
+            streaming_behavior: StreamingBehavior::default(),
+        }
+    }
+}
+
 
 // Impl display for FieldType
 impl std::fmt::Display for FieldType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FieldType::Enum(name) | FieldType::Class(name) => {
+            FieldType::Enum(name, _) | FieldType::Class(name, _) => {
                 write!(f, "{}", name)
             }
-            FieldType::Primitive(t) => write!(f, "{}", t),
-            FieldType::Literal(v) => write!(f, "{}", v),
-            FieldType::Union(choices) => {
+            FieldType::Primitive(t, _) => write!(f, "{}", t),
+            FieldType::Literal(v, _) => write!(f, "{}", v),
+            FieldType::Union(choices, _) => {
                 write!(
                     f,
                     "({})",
@@ -108,7 +138,7 @@ impl std::fmt::Display for FieldType {
                         .join(" | ")
                 )
             }
-            FieldType::Tuple(choices) => {
+            FieldType::Tuple(choices, _) => {
                 write!(
                     f,
                     "({})",
@@ -119,10 +149,9 @@ impl std::fmt::Display for FieldType {
                         .join(", ")
                 )
             }
-            FieldType::Map(k, v) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
-            FieldType::List(t) => write!(f, "{}[]", t.to_string()),
-            FieldType::Optional(t) => write!(f, "{}?", t.to_string()),
-            FieldType::Constrained { base, .. } => base.fmt(f),
+            FieldType::Map(k, v, _) => write!(f, "map<{}, {}>", k.to_string(), v.to_string()),
+            FieldType::List(t, _) => write!(f, "{}[]", t.to_string()),
+            FieldType::Optional(t, _) => write!(f, "{}?", t.to_string()),
         }
     }
 }
@@ -130,29 +159,26 @@ impl std::fmt::Display for FieldType {
 impl FieldType {
     pub fn is_primitive(&self) -> bool {
         match self {
-            FieldType::Primitive(_) => true,
-            FieldType::Optional(t) => t.is_primitive(),
-            FieldType::List(t) => t.is_primitive(),
-            FieldType::Constrained { base, .. } => base.is_primitive(),
+            FieldType::Primitive(_, _) => true,
+            FieldType::Optional(t, _) => t.is_primitive(),
+            FieldType::List(t, _) => t.is_primitive(),
             _ => false,
         }
     }
 
     pub fn is_optional(&self) -> bool {
         match self {
-            FieldType::Optional(_) => true,
-            FieldType::Primitive(TypeValue::Null) => true,
-            FieldType::Union(types) => types.iter().any(FieldType::is_optional),
-            FieldType::Constrained { base, .. } => base.is_optional(),
+            FieldType::Optional(_, _) => true,
+            FieldType::Primitive(TypeValue::Null, _) => true,
+            FieldType::Union(types, _) => types.iter().any(FieldType::is_optional),
             _ => false,
         }
     }
 
     pub fn is_null(&self) -> bool {
         match self {
-            FieldType::Primitive(TypeValue::Null) => true,
-            FieldType::Optional(t) => t.is_null(),
-            FieldType::Constrained { base, .. } => base.is_null(),
+            FieldType::Primitive(TypeValue::Null, _) => true,
+            FieldType::Optional(t, _) => t.is_null(),
             _ => false,
         }
     }
@@ -169,81 +195,97 @@ impl FieldType {
         if self == other {
             true
         } else {
-            if let FieldType::Union(items) = other {
+            if let FieldType::Union(items, _) = other {
                 if items.iter().any(|item| self.is_subtype_of(item)) {
                     return true;
                 }
             }
             match (self, other) {
-                (FieldType::Primitive(TypeValue::Null), FieldType::Optional(_)) => true,
-                (FieldType::Optional(self_item), FieldType::Optional(other_item)) => {
+                (FieldType::Primitive(TypeValue::Null, _), FieldType::Optional(_, _)) => true,
+                (FieldType::Optional(self_item, _), FieldType::Optional(other_item, _)) => {
                     self_item.is_subtype_of(other_item)
                 }
-                (_, FieldType::Optional(t)) => self.is_subtype_of(t),
-                (FieldType::Optional(_), _) => false,
+                (_, FieldType::Optional(t, _)) => self.is_subtype_of(t),
+                (FieldType::Optional(_, _), _) => false,
 
                 // Handle types that nest other types.
-                (FieldType::List(self_item), FieldType::List(other_item)) => {
+                (FieldType::List(self_item, _), FieldType::List(other_item, _)) => {
                     self_item.is_subtype_of(other_item)
                 }
-                (FieldType::List(_), _) => false,
+                (FieldType::List(_, _), _) => false,
 
-                (FieldType::Map(self_k, self_v), FieldType::Map(other_k, other_v)) => {
+                (FieldType::Map(self_k, self_v, _), FieldType::Map(other_k, other_v, _)) => {
                     other_k.is_subtype_of(self_k) && (**self_v).is_subtype_of(other_v)
                 }
-                (FieldType::Map(_, _), _) => false,
+                (FieldType::Map(_, _, _), _) => false,
 
                 (
-                    FieldType::Constrained {
-                        base: self_base,
-                        constraints: self_cs,
-                    },
-                    FieldType::Constrained {
-                        base: other_base,
-                        constraints: other_cs,
-                    },
-                ) => self_base.is_subtype_of(other_base) && self_cs == other_cs,
-                (FieldType::Constrained { base, .. }, _) => base.is_subtype_of(other),
-                (_, FieldType::Constrained { base, .. }) => self.is_subtype_of(base),
-                (
-                    FieldType::Literal(LiteralValue::Bool(_)),
-                    FieldType::Primitive(TypeValue::Bool),
+                    FieldType::Literal(LiteralValue::Bool(_), _),
+                    FieldType::Primitive(TypeValue::Bool, _),
                 ) => true,
-                (FieldType::Literal(LiteralValue::Bool(_)), _) => {
-                    self.is_subtype_of(&FieldType::Primitive(TypeValue::Bool))
+                (FieldType::Literal(LiteralValue::Bool(_), meta), _) => {
+                    self.is_subtype_of(&FieldType::Primitive(TypeValue::Bool, meta.clone()))
                 }
                 (
-                    FieldType::Literal(LiteralValue::Int(_)),
-                    FieldType::Primitive(TypeValue::Int),
+                    FieldType::Literal(LiteralValue::Int(_), _),
+                    FieldType::Primitive(TypeValue::Int, _),
                 ) => true,
-                (FieldType::Literal(LiteralValue::Int(_)), _) => {
-                    self.is_subtype_of(&FieldType::Primitive(TypeValue::Int))
+                (FieldType::Literal(LiteralValue::Int(_), meta), _) => {
+                    self.is_subtype_of(&FieldType::Primitive(TypeValue::Int, meta.clone()))
                 }
                 (
-                    FieldType::Literal(LiteralValue::String(_)),
-                    FieldType::Primitive(TypeValue::String),
+                    FieldType::Literal(LiteralValue::String(_), _),
+                    FieldType::Primitive(TypeValue::String, _),
                 ) => true,
-                (FieldType::Literal(LiteralValue::String(_)), _) => {
-                    self.is_subtype_of(&FieldType::Primitive(TypeValue::String))
+                (FieldType::Literal(LiteralValue::String(_), meta), _) => {
+                    self.is_subtype_of(&FieldType::Primitive(TypeValue::String, meta.clone()))
                 }
 
-                (FieldType::Union(self_items), _) => self_items
+                (FieldType::Union(self_items, _), _) => self_items
                     .iter()
                     .all(|self_item| self_item.is_subtype_of(other)),
 
-                (FieldType::Tuple(self_items), FieldType::Tuple(other_items)) => {
+                (FieldType::Tuple(self_items, _), FieldType::Tuple(other_items, _)) => {
                     self_items.len() == other_items.len()
                         && self_items
                             .iter()
                             .zip(other_items)
                             .all(|(self_item, other_item)| self_item.is_subtype_of(other_item))
                 }
-                (FieldType::Tuple(_), _) => false,
+                (FieldType::Tuple(_, _), _) => false,
 
-                (FieldType::Primitive(_), _) => false,
-                (FieldType::Enum(_), _) => false,
-                (FieldType::Class(_), _) => false,
+                (FieldType::Primitive(_, _), _) => false,
+                (FieldType::Enum(_, _), _) => false,
+                (FieldType::Class(_, _), _) => false,
             }
+        }
+    }
+
+    pub fn meta(&self) -> &TypeMetadata {
+        match self {
+            TypeWithMeta::Primitive(_,meta) => meta,
+            TypeWithMeta::Enum(_, meta) => meta,
+            TypeWithMeta::Literal(_, meta) => meta,
+            TypeWithMeta::Class(_, meta) => meta,
+            TypeWithMeta::List(_, meta) => meta,
+            TypeWithMeta::Map(_, _, meta) => meta,
+            TypeWithMeta::Union(_, meta) => meta,
+            TypeWithMeta::Tuple(_, meta) => meta,
+            TypeWithMeta::Optional(_, meta) => meta,
+        }
+    }
+
+    pub fn with_meta(self, meta: TypeMetadata) -> Self {
+        match self {
+            TypeWithMeta::Primitive(t, _) => TypeWithMeta::Primitive(t, meta),
+            TypeWithMeta::Enum(t, _) => TypeWithMeta::Enum(t, meta),
+            TypeWithMeta::Literal(t, _) => TypeWithMeta::Literal(t, meta),
+            TypeWithMeta::Class(t, _) => TypeWithMeta::Class(t, meta),
+            TypeWithMeta::List(t, _) => TypeWithMeta::List(t, meta),
+            TypeWithMeta::Map(k, v, _) => TypeWithMeta::Map(k, v, meta),
+            TypeWithMeta::Union(t, _) => TypeWithMeta::Union(t, meta),
+            TypeWithMeta::Tuple(t, _) => TypeWithMeta::Tuple(t, meta),
+            TypeWithMeta::Optional(t, _) => TypeWithMeta::Optional(t, meta),
         }
     }
 }
@@ -253,31 +295,31 @@ mod tests {
     use super::*;
 
     fn mk_int() -> FieldType {
-        FieldType::Primitive(TypeValue::Int)
+        FieldType::Primitive(TypeValue::Int, TypeMetadata::default())
     }
     fn mk_bool() -> FieldType {
-        FieldType::Primitive(TypeValue::Bool)
+        FieldType::Primitive(TypeValue::Bool, TypeMetadata::default())
     }
     fn mk_str() -> FieldType {
-        FieldType::Primitive(TypeValue::String)
+        FieldType::Primitive(TypeValue::String, TypeMetadata::default())
     }
 
     fn mk_optional(ft: FieldType) -> FieldType {
-        FieldType::Optional(Box::new(ft))
+        FieldType::Optional(Box::new(ft), TypeMetadata::default())
     }
 
     fn mk_list(ft: FieldType) -> FieldType {
-        FieldType::List(Box::new(ft))
+        FieldType::List(Box::new(ft), TypeMetadata::default())
     }
 
     fn mk_tuple(ft: Vec<FieldType>) -> FieldType {
-        FieldType::Tuple(ft)
+        FieldType::Tuple(ft, TypeMetadata::default())
     }
     fn mk_union(ft: Vec<FieldType>) -> FieldType {
-        FieldType::Union(ft)
+        FieldType::Union(ft, TypeMetadata::default())
     }
     fn mk_str_map(ft: FieldType) -> FieldType {
-        FieldType::Map(Box::new(mk_str()), Box::new(ft))
+        FieldType::Map(Box::new(mk_str()), Box::new(ft), TypeMetadata::default())
     }
 
     #[test]
@@ -324,18 +366,24 @@ mod tests {
 
     #[test]
     fn subtype_map_of_list_of_unions() {
-        let x = mk_str_map(mk_list(FieldType::Class("Foo".to_string())));
+        let x = mk_str_map(mk_list(FieldType::Class(
+            "Foo".to_string(),
+            TypeMetadata::default(),
+        )));
         let y = mk_str_map(mk_list(mk_union(vec![
             mk_str(),
             mk_int(),
-            FieldType::Class("Foo".to_string()),
+            FieldType::Class("Foo".to_string(), TypeMetadata::default()),
         ])));
         assert!(x.is_subtype_of(&y));
     }
 
     #[test]
     fn subtype_media() {
-        let x = FieldType::Primitive(TypeValue::Media(BamlMediaType::Audio));
+        let x = FieldType::Primitive(
+            TypeValue::Media(BamlMediaType::Audio),
+            TypeMetadata::default(),
+        );
         assert!(x.is_subtype_of(&x));
     }
 }

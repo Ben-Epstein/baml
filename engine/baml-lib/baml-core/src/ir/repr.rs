@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::{anyhow, Result};
-use baml_types::{Constraint, ConstraintLevel, FieldType, StringOr, UnresolvedValue};
+use baml_types::{Constraint, ConstraintLevel, FieldType, TypeMetadata, StreamingBehavior, StringOr, UnresolvedValue};
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_parser_database::{
@@ -233,7 +233,9 @@ pub struct NodeAttributes {
     ///   - @alias(...) becomes ("alias", ...)
     meta: IndexMap<String, UnresolvedValue<()>>,
 
-    pub constraints: Vec<Constraint>,
+    // A parsed representation of attributes on a type or a field that
+    // modify the type.
+    pub type_metadata: TypeMetadata,
 
     // Spans
     pub span: Option<ast::Span>,
@@ -249,7 +251,7 @@ impl Default for NodeAttributes {
     fn default() -> Self {
         NodeAttributes {
             meta: IndexMap::new(),
-            constraints: Vec::new(),
+            type_metadata: TypeMetadata::default(),
             span: None,
         }
     }
@@ -258,8 +260,8 @@ impl Default for NodeAttributes {
 fn to_ir_attributes(
     db: &ParserDatabase,
     maybe_ast_attributes: Option<&Attributes>,
-) -> (IndexMap<String, UnresolvedValue<()>>, Vec<Constraint>) {
-    let null_result = (IndexMap::new(), Vec::new());
+) -> (IndexMap<String, UnresolvedValue<()>>, TypeMetadata) {
+    let null_result = (IndexMap::new(), TypeMetadata::default());
     maybe_ast_attributes.map_or(null_result, |attributes| {
         let Attributes {
             description,
@@ -294,33 +296,21 @@ fn to_ir_attributes(
                 None
             }
         });
-        let streaming_done = streaming_done.as_ref().and_then(|v| {
-            if *v {
-                Some(("streaming::done".to_string(), UnresolvedValue::Bool(true, ())))
-            } else {
-                None
-            }
-        });
-        let streaming_needed = streaming_needed.as_ref().and_then(|v| {
-            if *v {
-                Some(("streaming::needed".to_string(), UnresolvedValue::Bool(true, ())))
-            } else {
-                None
-            }
-        });
-        let streaming_state = streaming_state.as_ref().and_then(|v| {
-            if *v {
-                Some(("streaming::state".to_string(), UnresolvedValue::Bool(true, ())))
-            } else {
-                None
-            }
-        });
 
-        let meta = vec![description, alias, dynamic_type, skip, streaming_done, streaming_needed, streaming_state]
+        let type_metadata = TypeMetadata {
+            constraints: constraints.clone(),
+            streaming_behavior: StreamingBehavior {
+                done: streaming_done.is_some(),
+                needed: streaming_needed.is_some(),
+                state: streaming_state.is_some(),
+            }
+        };
+
+        let meta = vec![description, alias, dynamic_type, skip]
             .into_iter()
             .filter_map(|s| s)
             .collect();
-        (meta, constraints.clone())
+        (meta, type_metadata)
     })
 }
 
@@ -334,13 +324,7 @@ pub struct Node<T> {
 /// Implement this for every node in the IR AST, where T is the type of IR node
 pub trait WithRepr<T> {
     /// Represents block or field attributes - @@ for enums and classes, @ for enum values and class fields
-    fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
-        NodeAttributes {
-            meta: IndexMap::new(),
-            constraints: Vec::new(),
-            span: None,
-        }
-    }
+    fn attributes(&self, _: &ParserDatabase) -> NodeAttributes;
 
     fn repr(&self, db: &ParserDatabase) -> Result<T>;
 
@@ -352,17 +336,28 @@ pub trait WithRepr<T> {
     }
 }
 
+/// Helper function for setting the Optional-ness of a type.
+/// TODO: The semantics are confusing. Optional types will
+/// be returned as still optional even when the `arity` parameter
+/// is `Optional`.
+/// 
+/// Then the `t` parameter has metadata and the `arity` parameter
+/// is Optional, we lift the inner metadata to the outer Option.
 fn type_with_arity(t: FieldType, arity: &FieldArity) -> FieldType {
     match arity {
         FieldArity::Required => t,
-        FieldArity::Optional => FieldType::Optional(Box::new(t)),
+        FieldArity::Optional => {
+            let meta = t.meta().clone();
+            let inner = t.with_meta(TypeMetadata::default());
+            FieldType::Optional(Box::new(inner), meta)
+        },
     }
 }
 
 impl WithRepr<FieldType> for ast::FieldType {
     // TODO: (Greg) This code only extracts constraints, and ignores any
     // other types of attributes attached to the type directly.
-    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let constraints = self
             .attributes()
             .iter()
@@ -395,9 +390,14 @@ impl WithRepr<FieldType> for ast::FieldType {
                 })
             })
             .collect::<Vec<Constraint>>();
+        let streaming_behavior = StreamingBehavior {
+            done: self.attributes().iter().find(|attr| attr.name() == "streaming::done").is_some(),
+            needed: self.attributes().iter().find(|attr| attr.name() == "streaming::needed").is_some(),
+            state: self.attributes().iter().find(|attr| attr.name() == "streaming::state").is_some(),
+        };
         let attributes = NodeAttributes {
             meta: IndexMap::new(),
-            constraints,
+            type_metadata: TypeMetadata { constraints, streaming_behavior },
             span: Some(self.span().clone()),
         };
 
@@ -405,48 +405,33 @@ impl WithRepr<FieldType> for ast::FieldType {
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
-        let constraints = WithRepr::attributes(self, db).constraints;
-        let has_constraints = constraints.len() > 0;
+        let NodeAttributes { type_metadata, .. } = WithRepr::attributes(self, db);
+        // let constraints = WithRepr::attributes(self, db).type_metadata.constraints;
+        let has_constraints = type_metadata.constraints.len() > 0;
         let base = match self {
             ast::FieldType::Primitive(arity, typeval, ..) => {
-                let repr = FieldType::Primitive(typeval.clone());
+                let repr = FieldType::Primitive(typeval.clone(), TypeMetadata::default());
                 if arity.is_optional() {
-                    FieldType::Optional(Box::new(repr))
+                    FieldType::Optional(Box::new(repr), type_metadata)
                 } else {
-                    repr
+                    repr.with_meta(type_metadata)
                 }
             }
             ast::FieldType::Literal(arity, literal_value, ..) => {
-                let repr = FieldType::Literal(literal_value.clone());
+                let repr = FieldType::Literal(literal_value.clone(), TypeMetadata::default());
                 if arity.is_optional() {
-                    FieldType::Optional(Box::new(repr))
+                    FieldType::Optional(Box::new(repr), type_metadata)
                 } else {
-                    repr
+                    repr.with_meta(type_metadata)
                 }
             }
             ast::FieldType::Symbol(arity, idn, ..) => type_with_arity(
                 match db.find_type(idn) {
                     Some(Either::Left(class_walker)) => {
-                        let base_class = FieldType::Class(class_walker.name().to_string());
-                        let maybe_constraints = class_walker.get_constraints(SubType::Class);
-                        match maybe_constraints {
-                            Some(constraints) if constraints.len() > 0 => FieldType::Constrained {
-                                base: Box::new(base_class),
-                                constraints,
-                            },
-                            _ => base_class,
-                        }
+                        FieldType::Class(class_walker.name().to_string(), type_metadata)
                     }
                     Some(Either::Right(enum_walker)) => {
-                        let base_type = FieldType::Enum(enum_walker.name().to_string());
-                        let maybe_constraints = enum_walker.get_constraints(SubType::Enum);
-                        match maybe_constraints {
-                            Some(constraints) if constraints.len() > 0 => FieldType::Constrained {
-                                base: Box::new(base_type),
-                                constraints,
-                            },
-                            _ => base_type,
-                        }
+                        FieldType::Enum(enum_walker.name().to_string(), type_metadata)
                     }
                     None => return Err(anyhow!("Field type uses unresolvable local identifier")),
                 },
@@ -454,7 +439,7 @@ impl WithRepr<FieldType> for ast::FieldType {
             ),
             ast::FieldType::List(arity, ft, dims, ..) => {
                 // NB: potential bug: this hands back a 1D list when dims == 0
-                let mut repr = FieldType::List(Box::new(ft.repr(db)?));
+                let mut repr = FieldType::List(Box::new(ft.repr(db)?), TypeMetadata::default());
 
                 for _ in 1u32..*dims {
                     repr = FieldType::list(repr);
@@ -464,44 +449,35 @@ impl WithRepr<FieldType> for ast::FieldType {
                     repr = FieldType::optional(repr);
                 }
 
-                repr
+                repr.with_meta(type_metadata)
             }
             ast::FieldType::Map(arity, kv, ..) => {
                 // NB: we can't just unpack (*kv) into k, v because that would require a move/copy
                 let mut repr =
-                    FieldType::Map(Box::new((*kv).0.repr(db)?), Box::new((*kv).1.repr(db)?));
+                    FieldType::Map(Box::new((*kv).0.repr(db)?), Box::new((*kv).1.repr(db)?), TypeMetadata::default());
 
                 if arity.is_optional() {
                     repr = FieldType::optional(repr);
                 }
 
-                repr
+                repr.with_meta(type_metadata)
             }
             ast::FieldType::Union(arity, t, ..) => {
                 // NB: preempt union flattening by mixing arity into union types
                 let mut types = t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?;
 
                 if arity.is_optional() {
-                    types.push(FieldType::Primitive(baml_types::TypeValue::Null));
+                    types.push(FieldType::Primitive(baml_types::TypeValue::Null, TypeMetadata::default()));
                 }
 
-                FieldType::Union(types)
+                FieldType::Union(types, type_metadata)
             }
             ast::FieldType::Tuple(arity, t, ..) => type_with_arity(
-                FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?),
+                FieldType::Tuple(t.iter().map(|ft| ft.repr(db)).collect::<Result<Vec<_>>>()?, type_metadata),
                 arity,
             ),
         };
-
-        let with_constraints = if has_constraints {
-            FieldType::Constrained {
-                base: Box::new(base.clone()),
-                constraints,
-            }
-        } else {
-            base
-        };
-        Ok(with_constraints)
+        Ok(base)
     }
 }
 
@@ -542,7 +518,7 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-            constraints: Vec::new(),
+            type_metadata: TypeMetadata::default(),
             span: Some(self.span().clone()),
         }
     }
@@ -584,10 +560,10 @@ pub struct Enum {
 
 impl WithRepr<EnumValue> for EnumValueWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let (meta, constraints) = to_ir_attributes(db, self.get_default_attributes());
+        let (meta, type_metadata) = to_ir_attributes(db, self.get_default_attributes());
         let attributes = NodeAttributes {
             meta,
-            constraints,
+            type_metadata,
             span: Some(self.span().clone()),
         };
 
@@ -601,10 +577,10 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
 
 impl WithRepr<Enum> for EnumWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let (meta, constraints) = to_ir_attributes(db, self.get_default_attributes(SubType::Enum));
+        let (meta, type_metadata) = to_ir_attributes(db, self.get_default_attributes(SubType::Enum));
         let attributes = NodeAttributes {
             meta,
-            constraints,
+            type_metadata,
             span: Some(self.span().clone()),
         };
 
@@ -638,10 +614,10 @@ pub struct Field {
 
 impl WithRepr<Field> for FieldWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
-        let (meta, constraints) = to_ir_attributes(db, self.get_default_attributes());
+        let (meta, type_metadata) = to_ir_attributes(db, self.get_default_attributes());
         let attributes = NodeAttributes {
             meta,
-            constraints,
+            type_metadata,
             span: Some(self.span().clone()),
         };
 
@@ -689,10 +665,10 @@ pub struct Class {
 impl WithRepr<Class> for ClassWalker<'_> {
     fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
         let default_attributes = self.get_default_attributes(SubType::Class);
-        let (meta, constraints) = to_ir_attributes(db, default_attributes);
+        let (meta, type_metadata) = to_ir_attributes(db, default_attributes);
         let attributes = NodeAttributes {
             meta,
-            constraints,
+            type_metadata,
             span: Some(self.span().clone()),
         };
 
@@ -875,7 +851,7 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-            constraints: Vec::new(),
+            type_metadata: TypeMetadata::default(),
             span: Some(self.span().clone()),
         }
     }
@@ -932,7 +908,7 @@ impl WithRepr<Client> for ClientWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            constraints: Vec::new(),
+            type_metadata: TypeMetadata::default(),
             span: Some(self.span().clone()),
         }
     }
@@ -971,7 +947,7 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            constraints: Vec::new(),
+            type_metadata: TypeMetadata::default(),
             span: Some(self.span().clone()),
         }
     }
@@ -1009,6 +985,8 @@ pub struct TestCase {
 impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         let span = self.0.test_case().functions[self.1].1.clone();
+
+        // TODO: Do we need this?
         let constraints = self
             .0
             .test_case()
@@ -1019,7 +997,10 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
             .collect();
         NodeAttributes {
             meta: IndexMap::new(),
-            constraints,
+            type_metadata: TypeMetadata {
+                constraints,
+                streaming_behavior: StreamingBehavior::default(),
+            },
             span: Some(span),
         }
     }
@@ -1043,7 +1024,10 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
         NodeAttributes {
             meta: IndexMap::new(),
             span: Some(self.span().clone()),
-            constraints,
+            type_metadata: TypeMetadata {
+                constraints,
+                streaming_behavior: StreamingBehavior::default(),
+            },
         }
     }
 
@@ -1063,6 +1047,7 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             constraints: <AstWalker<'_, (ValExpId, &str)> as WithRepr<TestCase>>::attributes(
                 self, db,
             )
+            .type_metadata
             .constraints
             .into_iter()
             .collect::<Vec<_>>(),
@@ -1086,6 +1071,10 @@ pub struct ChatMessage {
 }
 
 impl WithRepr<Prompt> for PromptAst<'_> {
+    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes::default()
+    }
+
     fn repr(&self, _db: &ParserDatabase) -> Result<Prompt> {
         Ok(match self {
             PromptAst::String(content, _) => Prompt::String(content.clone(), vec![]),
@@ -1237,17 +1226,12 @@ mod tests {
               foo_bool bool @streaming::state
               foo_list int[] @streaming::done
             }
-
-            class Bar {
-              name string @streaming::done
-              message string
-              @@streaming::done
-            }
         "##,
         )
         .unwrap();
         let foo = ir.find_class("Foo").unwrap();
         assert!(!foo.streaming_done());
+        dbg!(&foo.item);
         match foo.walk_fields().collect::<Vec<_>>().as_slice() {
             [field1, field2, field3] => {
                 assert!(field1.streaming_needed());
@@ -1256,12 +1240,27 @@ mod tests {
             },
             _ => panic!("Expected exactly 3 fields")
         }
+    }
+
+    #[test]
+    fn test_streaming_block_attributes() {
+        let ir = make_test_ir(
+            r##"
+            class Bar {
+              name string @streaming::done
+              // message string
+              // @@streaming::done
+            }
+        "##,
+        )
+        .unwrap();
         let bar = ir.find_class("Bar").unwrap();
+        dbg!(bar.item);
         assert!(bar.streaming_done());
         match bar.walk_fields().collect::<Vec<_>>().as_slice() {
             [field1, field2] => {
                 assert!(!field1.streaming_done());
-                assert(field1.item.elem.r#type.attributes.get("streamming"))
+                assert!(field1.item.elem.r#type.attributes.get("streamming::done").is_some())
             },
             _ => panic!("Expected exactly 2 fields")
         }

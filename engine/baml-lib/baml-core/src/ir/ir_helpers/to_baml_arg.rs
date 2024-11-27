@@ -43,8 +43,8 @@ impl ArgCoercer {
         value: &BamlValue, // original value passed in by user
         scope: &mut ScopeStack,
     ) -> Result<BamlValue, ()> {
-        let value = match ir.distribute_constraints(field_type) {
-            (FieldType::Primitive(t), _) => match t {
+        let value = match field_type {
+            FieldType::Primitive(t, _) => match t {
                 TypeValue::String if matches!(value, BamlValue::String(_)) => Ok(value.clone()),
                 TypeValue::String if self.allow_implicit_cast_to_string => match value {
                     BamlValue::Int(i) => Ok(BamlValue::String(i.to_string())),
@@ -174,7 +174,7 @@ impl ArgCoercer {
                     Err(())
                 }
             },
-            (FieldType::Enum(name), _) => match value {
+            FieldType::Enum(name, _) => match value {
                 BamlValue::String(s) => {
                     if let Ok(e) = ir.find_enum(name) {
                         if e.walk_values().find(|v| v.item.elem.0 == *s).is_some() {
@@ -202,7 +202,7 @@ impl ArgCoercer {
                     Err(())
                 }
             },
-            (FieldType::Literal(literal), _) => Ok(match (literal, value) {
+            FieldType::Literal(literal, _) => Ok(match (literal, value) {
                 (LiteralValue::Int(lit), BamlValue::Int(baml)) if lit == baml => value.clone(),
                 (LiteralValue::String(lit), BamlValue::String(baml)) if lit == baml => {
                     value.clone()
@@ -213,7 +213,7 @@ impl ArgCoercer {
                     return Err(());
                 }
             }),
-            (FieldType::Class(name), _) => match value {
+            FieldType::Class(name, _) => match value {
                 BamlValue::Class(n, _) if n == name => Ok(value.clone()),
                 BamlValue::Class(_, obj) | BamlValue::Map(obj) => match ir.find_class(name) {
                     Ok(c) => {
@@ -263,7 +263,7 @@ impl ArgCoercer {
                     Err(())
                 }
             },
-            (FieldType::List(item), _) => match value {
+            FieldType::List(item, _) => match value {
                 BamlValue::List(arr) => {
                     let mut items = Vec::new();
                     for v in arr {
@@ -278,11 +278,11 @@ impl ArgCoercer {
                     Err(())
                 }
             },
-            (FieldType::Tuple(_), _) => {
+            FieldType::Tuple(_, _) => {
                 scope.push_error(format!("Tuples are not yet supported"));
                 Err(())
             }
-            (FieldType::Map(k, v), _) => {
+            FieldType::Map(k, v, _) => {
                 if let BamlValue::Map(kv) = value {
                     let mut map = BamlMap::new();
                     for (key, value) in kv {
@@ -304,7 +304,7 @@ impl ArgCoercer {
                     Err(())
                 }
             }
-            (FieldType::Union(options), _) => {
+            FieldType::Union(options, _) => {
                 let mut first_good_result = Err(());
                 for option in options {
                     let mut scope = ScopeStack::new();
@@ -324,7 +324,7 @@ impl ArgCoercer {
                     first_good_result
                 }
             }
-            (FieldType::Optional(inner), _) => {
+            FieldType::Optional(inner, _) => {
                 if matches!(value, BamlValue::Null) {
                     Ok(value.clone())
                 } else {
@@ -337,9 +337,6 @@ impl ArgCoercer {
                         baml_arg
                     }
                 }
-            }
-            (FieldType::Constrained { .. }, _) => {
-                unreachable!("The return value of distribute_constraints can never be FieldType::Constrainted");
             }
         }?;
 
@@ -403,7 +400,7 @@ fn first_failing_assert_nested<'a>(
 
 #[cfg(test)]
 mod tests {
-    use baml_types::JinjaExpression;
+    use baml_types::{JinjaExpression, StreamingBehavior, TypeMetadata};
 
     use crate::ir::repr::make_test_ir;
 
@@ -428,14 +425,14 @@ mod tests {
         )
         .unwrap();
         let value = BamlValue::Int(1);
-        let type_ = FieldType::Constrained {
-            base: Box::new(FieldType::Primitive(TypeValue::Int)),
-            constraints: vec![Constraint {
+        let type_ : FieldType = FieldType::Primitive(TypeValue::Int, TypeMetadata {
+            constraints: vec![Constraint{
                 level: ConstraintLevel::Assert,
                 expression: JinjaExpression("this.length() > 0".to_string()),
                 label: Some("foo".to_string()),
             }],
-        };
+            streaming_behavior: StreamingBehavior::default(),
+        });
         let arg_coercer = ArgCoercer {
             span_path: None,
             allow_implicit_cast_to_string: true,

@@ -79,7 +79,7 @@ impl WithJsonSchema for FunctionArgs {
                 for (name, t) in args.iter() {
                     properties[name] = t.json_schema();
                     match t {
-                        FieldType::Optional(_) => {
+                        FieldType::Optional(_, _) => {
                             required_props.push(name.clone());
                         }
                         _ => {}
@@ -102,7 +102,7 @@ impl WithJsonSchema for Vec<(String, FieldType)> {
         for (name, t) in self.iter() {
             properties[name.clone()] = t.json_schema();
             match t {
-                FieldType::Optional(_) => {}
+                FieldType::Optional(_, _) => {}
                 _ => {
                     required_props.push(name.clone());
                 }
@@ -138,7 +138,7 @@ impl WithJsonSchema for Walker<'_, &Class> {
         for field in self.elem().static_fields.iter() {
             properties[field.elem.name.clone()] = field.elem.r#type.elem.json_schema();
             match field.elem.r#type.elem {
-                FieldType::Optional(_) => {}
+                FieldType::Optional(_, _) => {}
                 _ => {
                     required_props.push(field.elem.name.clone());
                 }
@@ -156,13 +156,13 @@ impl WithJsonSchema for Walker<'_, &Class> {
 impl<'db> WithJsonSchema for FieldType {
     fn json_schema(&self) -> serde_json::Value {
         match self {
-            FieldType::Class(name) | FieldType::Enum(name) => json!({
+            FieldType::Class(name, _) | FieldType::Enum(name, _) => json!({
                 "$ref": format!("#/definitions/{}", name),
             }),
-            FieldType::Literal(v) => json!({
+            FieldType::Literal(v, _) => json!({
                 "const": v.to_string(),
             }),
-            FieldType::Primitive(t) => match t {
+            FieldType::Primitive(t, _) => match t {
                 TypeValue::String => json!({
                     "type": "string",
                 }),
@@ -189,17 +189,17 @@ impl<'db> WithJsonSchema for FieldType {
                     "required": ["url"],
                 }),
             },
-            FieldType::List(item) => json!({
+            FieldType::List(item, _) => json!({
                 "type": "array",
                 "items": (*item).json_schema()
             }),
-            FieldType::Map(_k, v) => json!({
+            FieldType::Map(_k, v, _) => json!({
                 "type": "object",
                 "additionalProperties": {
                     "type": v.json_schema(),
                 }
             }),
-            FieldType::Union(options) => json!({
+            FieldType::Union(options, _) => json!({
                 "anyOf": options.iter().map(|t| {
                     let mut res = t.json_schema();
                     // if res is a map, add a "title" field
@@ -210,14 +210,14 @@ impl<'db> WithJsonSchema for FieldType {
                 }
             ).collect::<Vec<_>>(),
             }),
-            FieldType::Tuple(options) => json!({
+            FieldType::Tuple(options, _) => json!({
                 "type": "array",
                 "prefixItems": options.iter().map(|t| t.json_schema()).collect::<Vec<_>>(),
             }),
             // The caller object is responsible for adding the "null" type
-            FieldType::Optional(inner) => {
+            FieldType::Optional(inner, _) => {
                 match **inner {
-                    FieldType::Primitive(_) => {
+                    FieldType::Primitive(_, _) => {
                         let mut res = inner.json_schema();
                         res["type"] = json!([res["type"], "null"]);
                         res["default"] = serde_json::Value::Null;
@@ -236,7 +236,6 @@ impl<'db> WithJsonSchema for FieldType {
                     }
                 }
             }
-            FieldType::Constrained { base, .. } => base.json_schema(),
         }
     }
 }

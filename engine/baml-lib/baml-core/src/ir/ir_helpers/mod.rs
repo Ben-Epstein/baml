@@ -14,8 +14,7 @@ use crate::{
 };
 use anyhow::Result;
 use baml_types::{
-    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
-    TypeValue,
+    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue, TypeMetadata, TypeValue
 };
 pub use to_baml_arg::ArgCoercer;
 
@@ -214,8 +213,8 @@ impl IRHelper for IntermediateRepr {
     ) -> anyhow::Result<BamlValueWithMeta<FieldType>> {
         match value {
             BamlValue::String(s) => {
-                let literal_type = FieldType::Literal(LiteralValue::String(s.clone()));
-                let primitive_type = FieldType::Primitive(TypeValue::String);
+                let literal_type = FieldType::Literal(LiteralValue::String(s.clone()), TypeMetadata::default());
+                let primitive_type = FieldType::Primitive(TypeValue::String, TypeMetadata::default());
 
                 if literal_type.is_subtype_of(&field_type)
                     || primitive_type.is_subtype_of(&field_type)
@@ -225,12 +224,12 @@ impl IRHelper for IntermediateRepr {
                 anyhow::bail!("Could not unify String with {:?}", field_type)
             }
             BamlValue::Int(i)
-                if FieldType::Literal(LiteralValue::Int(i.clone())).is_subtype_of(&field_type) =>
+                if FieldType::Literal(LiteralValue::Int(i.clone()), TypeMetadata::default()).is_subtype_of(&field_type) =>
             {
                 Ok(BamlValueWithMeta::Int(i, field_type))
             }
             BamlValue::Int(i)
-                if FieldType::Primitive(TypeValue::Int).is_subtype_of(&field_type) =>
+                if FieldType::Primitive(TypeValue::Int, TypeMetadata::default()).is_subtype_of(&field_type) =>
             {
                 Ok(BamlValueWithMeta::Int(i, field_type))
             }
@@ -239,15 +238,15 @@ impl IRHelper for IntermediateRepr {
             }
 
             BamlValue::Float(f)
-                if FieldType::Primitive(TypeValue::Float).is_subtype_of(&field_type) =>
+                if FieldType::Primitive(TypeValue::Float, TypeMetadata::default()).is_subtype_of(&field_type) =>
             {
                 Ok(BamlValueWithMeta::Float(f, field_type))
             }
             BamlValue::Float(_) => anyhow::bail!("Could not unify Float with {:?}", field_type),
 
             BamlValue::Bool(b) => {
-                let literal_type = FieldType::Literal(LiteralValue::Bool(b));
-                let primitive_type = FieldType::Primitive(TypeValue::Bool);
+                let literal_type = FieldType::Literal(LiteralValue::Bool(b), TypeMetadata::default());
+                let primitive_type = FieldType::Primitive(TypeValue::Bool, TypeMetadata::default());
 
                 if literal_type.is_subtype_of(&field_type) {
                     Ok(BamlValueWithMeta::Bool(b, field_type))
@@ -258,7 +257,7 @@ impl IRHelper for IntermediateRepr {
                 }
             }
 
-            BamlValue::Null if FieldType::Primitive(TypeValue::Null).is_subtype_of(&field_type) => {
+            BamlValue::Null if FieldType::Primitive(TypeValue::Null, TypeMetadata::default()).is_subtype_of(&field_type) => {
                 Ok(BamlValueWithMeta::Null(field_type))
             }
             BamlValue::Null => anyhow::bail!("Could not unify Null with {:?}", field_type),
@@ -272,20 +271,21 @@ impl IRHelper for IntermediateRepr {
                 let maybe_item_type = match item_types.len() {
                     0 => None,
                     1 => Some(item_types[0].clone()),
-                    _ => Some(FieldType::Union(item_types)),
+                    _ => Some(FieldType::Union(item_types, TypeMetadata::default())),
                 };
 
                 match maybe_item_type {
                     Some(item_type) => {
                         let map_type = FieldType::Map(
                             Box::new(match &field_type {
-                                FieldType::Map(key, _) => match key.as_ref() {
-                                    FieldType::Enum(name) => FieldType::Enum(name.clone()),
+                                FieldType::Map(key, _, _) => match key.as_ref() {
+                                    FieldType::Enum(name, meta) => FieldType::Enum(name.clone(), meta.clone()),
                                     _ => FieldType::string(),
                                 },
                                 _ => FieldType::string(),
                             }),
                             Box::new(item_type.clone()),
+                            TypeMetadata::default()
                         );
 
                         if !map_type.is_subtype_of(&field_type) {
@@ -315,12 +315,12 @@ impl IRHelper for IntermediateRepr {
                 let maybe_item_type = match item_types.len() {
                     0 => None,
                     1 => Some(item_types[0].clone()),
-                    _ => Some(FieldType::Union(item_types)),
+                    _ => Some(FieldType::Union(item_types, TypeMetadata::default())),
                 };
                 match maybe_item_type.as_ref() {
                     None => Ok(BamlValueWithMeta::List(vec![], field_type)),
                     Some(item_type) => {
-                        let list_type = FieldType::List(Box::new(item_type.clone()));
+                        let list_type = FieldType::List(Box::new(item_type.clone()), TypeMetadata::default());
 
                         if !list_type.is_subtype_of(&field_type) {
                             anyhow::bail!("Could not unify {:?} with {:?}", list_type, field_type);
@@ -336,7 +336,7 @@ impl IRHelper for IntermediateRepr {
             }
 
             BamlValue::Media(m)
-                if FieldType::Primitive(TypeValue::Media(m.media_type))
+                if FieldType::Primitive(TypeValue::Media(m.media_type), TypeMetadata::default())
                     .is_subtype_of(&field_type) =>
             {
                 Ok(BamlValueWithMeta::Media(m, field_type))
@@ -344,7 +344,7 @@ impl IRHelper for IntermediateRepr {
             BamlValue::Media(_) => anyhow::bail!("Could not unify Media with {:?}", field_type),
 
             BamlValue::Enum(name, val) => {
-                if FieldType::Enum(name.clone()).is_subtype_of(&field_type) {
+                if FieldType::Enum(name.clone(), TypeMetadata::default()).is_subtype_of(&field_type) {
                     Ok(BamlValueWithMeta::Enum(name, val, field_type))
                 } else {
                     anyhow::bail!("Could not unify Enum {} with {:?}", name, field_type)
@@ -352,7 +352,7 @@ impl IRHelper for IntermediateRepr {
             }
 
             BamlValue::Class(name, fields) => {
-                if !FieldType::Class(name.clone()).is_subtype_of(&field_type) {
+                if !FieldType::Class(name.clone(), TypeMetadata::default()).is_subtype_of(&field_type) {
                     anyhow::bail!("Could not unify Class {} with {:?}", name, field_type);
                 } else {
                     let class_type = &self.find_class(&name)?.item.elem;
@@ -371,7 +371,7 @@ impl IRHelper for IntermediateRepr {
                         .map(|(k, v)| {
                             let field_type = match class_fields.get(k.as_str()) {
                                 Some(ft) => ft.clone(),
-                                None => infer_type(&v).unwrap_or(UNIT_TYPE),
+                                None => infer_type(&v).unwrap_or(unit_type()),
                             };
                             let mapped_field = self.distribute_type(v, field_type)?;
                             Ok((k, mapped_field))
@@ -384,12 +384,10 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
-    /// Constraints may live in several places. A constrained base type stors its
+    /// Constraints may live in several places. A constrained base type stores its
     /// constraints by wrapping itself in the `FieldType::Constrained` constructor.
     /// Additionally, `FieldType::Class` may have constraints stored in its class node,
     /// and `FieldType::Enum` can store constraints in its `Enum` node.
-    /// And the `FieldType::Constrained` constructor might wrap another
-    /// `FieldType::Constrained` constructor.
     ///
     /// This function collects constraints for a given type from all these
     /// possible sources. Whenever querying a type for its constraints, you
@@ -400,33 +398,14 @@ impl IRHelper for IntermediateRepr {
         field_type: &'a FieldType,
     ) -> (&'a FieldType, Vec<Constraint>) {
         match field_type {
-            FieldType::Class(class_name) => match self.find_class(class_name) {
+            FieldType::Class(class_name, meta) => match self.find_class(class_name) {
                 Err(_) => (field_type, Vec::new()),
-                Ok(class_node) => (field_type, class_node.item.attributes.constraints.clone()),
+                Ok(class_node) => (field_type, class_node.item.attributes.type_metadata.constraints.clone()),
             },
-            FieldType::Enum(enum_name) => match self.find_enum(enum_name) {
+            FieldType::Enum(enum_name, meta) => match self.find_enum(enum_name) {
                 Err(_) => (field_type, Vec::new()),
-                Ok(enum_node) => (field_type, enum_node.item.attributes.constraints.clone()),
+                Ok(enum_node) => (field_type, enum_node.item.attributes.type_metadata.constraints.clone()),
             },
-            // Check the first level to see if it's constrained.
-            FieldType::Constrained { base, constraints } => {
-                match base.as_ref() {
-                    // If so, we must check the second level to see if we need to combine
-                    // constraints across levels.
-                    // The recursion here means that arbitrarily nested `FieldType::Constrained`s
-                    // will be collapsed before the function returns.
-                    FieldType::Constrained { .. } => {
-                        let (sub_base, sub_constraints) =
-                            self.distribute_constraints(base.as_ref());
-                        let combined_constraints = vec![constraints.clone(), sub_constraints]
-                            .into_iter()
-                            .flatten()
-                            .collect();
-                        (sub_base, combined_constraints)
-                    }
-                    _ => (base, constraints.clone()),
-                }
-            }
             _ => (field_type, Vec::new()),
         }
     }
@@ -444,30 +423,30 @@ impl IRHelper for IntermediateRepr {
     }
 }
 
-const UNIT_TYPE: FieldType = FieldType::Tuple(vec![]);
+fn unit_type() -> FieldType { FieldType::Tuple(vec![], TypeMetadata::default()) }
 
 /// Derive the simplest type that can categorize a given value. This is meant to be used
 /// by `distribute_type`, for dynamic fields of classes, whose types are not known statically.
 pub fn infer_type<'a>(value: &'a BamlValue) -> Option<FieldType> {
     let ret = match value {
-        BamlValue::Int(_) => Some(FieldType::Primitive(TypeValue::Int)),
-        BamlValue::Bool(_) => Some(FieldType::Primitive(TypeValue::Bool)),
-        BamlValue::Float(_) => Some(FieldType::Primitive(TypeValue::Float)),
-        BamlValue::String(_) => Some(FieldType::Primitive(TypeValue::String)),
-        BamlValue::Null => Some(FieldType::Primitive(TypeValue::Null)),
+        BamlValue::Int(_) => Some(FieldType::Primitive(TypeValue::Int, TypeMetadata::default())),
+        BamlValue::Bool(_) => Some(FieldType::Primitive(TypeValue::Bool, TypeMetadata::default())),
+        BamlValue::Float(_) => Some(FieldType::Primitive(TypeValue::Float, TypeMetadata::default())),
+        BamlValue::String(_) => Some(FieldType::Primitive(TypeValue::String, TypeMetadata::default())),
+        BamlValue::Null => Some(FieldType::Primitive(TypeValue::Null, TypeMetadata::default())),
         BamlValue::Map(pairs) => {
             let v_tys = pairs
                 .iter()
                 .filter_map(|(_, v)| infer_type(v))
                 .dedup()
                 .collect::<Vec<_>>();
-            let k_ty = FieldType::Primitive(TypeValue::String);
+            let k_ty = FieldType::Primitive(TypeValue::String, TypeMetadata::default());
             let v_ty = match v_tys.len() {
                 0 => None,
                 1 => Some(v_tys[0].clone()),
-                _ => Some(FieldType::Union(v_tys)),
+                _ => Some(FieldType::Union(v_tys, TypeMetadata::default())),
             }?;
-            Some(FieldType::Map(Box::new(k_ty), Box::new(v_ty)))
+            Some(FieldType::Map(Box::new(k_ty), Box::new(v_ty), TypeMetadata::default()))
         }
         BamlValue::List(items) => {
             let item_tys = items
@@ -478,13 +457,13 @@ pub fn infer_type<'a>(value: &'a BamlValue) -> Option<FieldType> {
             let item_ty = match item_tys.len() {
                 0 => None,
                 1 => Some(item_tys[0].clone()),
-                _ => Some(FieldType::Union(item_tys)),
+                _ => Some(FieldType::Union(item_tys, TypeMetadata::default())),
             }?;
-            Some(FieldType::List(Box::new(item_ty)))
+            Some(FieldType::List(Box::new(item_ty), TypeMetadata::default()))
         }
-        BamlValue::Media(m) => Some(FieldType::Primitive(TypeValue::Media(m.media_type))),
-        BamlValue::Enum(enum_name, _) => Some(FieldType::Enum(enum_name.clone())),
-        BamlValue::Class(class_name, _) => Some(FieldType::Class(class_name.clone())),
+        BamlValue::Media(m) => Some(FieldType::Primitive(TypeValue::Media(m.media_type), TypeMetadata::default())),
+        BamlValue::Enum(enum_name, _) => Some(FieldType::Enum(enum_name.clone(), TypeMetadata::default())),
+        BamlValue::Class(class_name, _) => Some(FieldType::Class(class_name.clone(), TypeMetadata::default())),
     };
     ret
 }
@@ -499,11 +478,11 @@ mod tests {
     use repr::make_test_ir;
 
     fn int_type() -> FieldType {
-        FieldType::Primitive(TypeValue::Int)
+        FieldType::Primitive(TypeValue::Int, TypeMetadata::default())
     }
 
     fn string_type() -> FieldType {
-        FieldType::Primitive(TypeValue::String)
+        FieldType::Primitive(TypeValue::String, TypeMetadata::default())
     }
 
     fn mk_int(i: i64) -> BamlValue {
@@ -541,7 +520,7 @@ mod tests {
         let my_list = mk_list_1();
         assert_eq!(
             infer_type(&my_list).unwrap(),
-            FieldType::List(Box::new(int_type()))
+            FieldType::List(Box::new(int_type()), TypeMetadata::default())
         );
     }
 
@@ -550,7 +529,7 @@ mod tests {
         let my_map = mk_map_1();
         assert_eq!(
             infer_type(&my_map).unwrap(),
-            FieldType::Map(Box::new(string_type()), Box::new(int_type()))
+            FieldType::Map(Box::new(string_type()), Box::new(int_type()), TypeMetadata::default())
         );
     }
 
@@ -567,8 +546,10 @@ mod tests {
                 Box::new(string_type()),
                 Box::new(FieldType::Map(
                     Box::new(string_type()),
-                    Box::new(int_type())
-                ))
+                    Box::new(int_type()),
+                    TypeMetadata::default()
+                )),
+                TypeMetadata::default()
             )
         )
     }
@@ -590,7 +571,7 @@ mod tests {
                 base64: "abcd=".to_string(),
             }),
         });
-        let t = FieldType::Primitive(TypeValue::Media(BamlMediaType::Audio));
+        let t = FieldType::Primitive(TypeValue::Media(BamlMediaType::Audio), TypeMetadata::default());
         let _value_with_meta = ir.distribute_type(v, t).unwrap();
     }
 
@@ -599,8 +580,8 @@ mod tests {
         let ir = mk_ir();
         let field_type = FieldType::Union(vec![
             string_type(),
-            FieldType::Primitive(TypeValue::Media(BamlMediaType::Image)),
-        ]);
+            FieldType::Primitive(TypeValue::Media(BamlMediaType::Image), TypeMetadata::default()),
+        ], TypeMetadata::default());
         let baml_value = BamlValue::Media(BamlMedia {
             media_type: BamlMediaType::Image,
             mime_type: None,
@@ -619,12 +600,12 @@ mod tests {
         let elem_type = FieldType::Union(vec![
             string_type(),
             int_type(),
-            FieldType::Class("Foo".to_string()),
-        ]);
-        let map_type = FieldType::Map(Box::new(string_type()), Box::new(elem_type.clone()));
+            FieldType::Class("Foo".to_string(), TypeMetadata::default()),
+        ], TypeMetadata::default());
+        let map_type = FieldType::Map(Box::new(string_type()), Box::new(elem_type.clone()), TypeMetadata::default());
 
         // The compound type we want to test.
-        let list_type = FieldType::List(Box::new(map_type.clone()));
+        let list_type = FieldType::List(Box::new(map_type.clone()), TypeMetadata::default());
 
         let map_1 = BamlValue::Map(
             vec![
@@ -672,13 +653,13 @@ mod tests {
         let elem_type = FieldType::Union(vec![
             string_type(),
             int_type(),
-            FieldType::Class("Foo".to_string()),
-        ]);
+            FieldType::Class("Foo".to_string(), TypeMetadata::default()),
+        ], TypeMetadata::default());
 
-        let list_type = FieldType::List(Box::new(elem_type));
+        let list_type = FieldType::List(Box::new(elem_type), TypeMetadata::default());
 
         // The compound type we want to test.
-        let map_type = FieldType::Map(Box::new(string_type()), Box::new(list_type));
+        let map_type = FieldType::Map(Box::new(string_type()), Box::new(list_type), TypeMetadata::default());
 
         let foo_1 = BamlValue::Class(
             "Foo".to_string(),
@@ -764,34 +745,4 @@ mod tests {
         assert!(res.is_err());
     }
 
-    #[test]
-    fn test_nested_constraint_distribution() {
-        let ir = make_test_ir("").unwrap();
-        fn mk_constraint(s: &str) -> Constraint {
-            Constraint {
-                level: ConstraintLevel::Assert,
-                expression: JinjaExpression(s.to_string()),
-                label: Some(s.to_string()),
-            }
-        }
-
-        let input = FieldType::Constrained {
-            constraints: vec![mk_constraint("a")],
-            base: Box::new(FieldType::Constrained {
-                constraints: vec![mk_constraint("b")],
-                base: Box::new(FieldType::Constrained {
-                    constraints: vec![mk_constraint("c")],
-                    base: Box::new(FieldType::Primitive(TypeValue::Int)),
-                }),
-            }),
-        };
-
-        let expected_base = FieldType::Primitive(TypeValue::Int);
-        let expected_constraints = vec![mk_constraint("a"), mk_constraint("b"), mk_constraint("c")];
-
-        let (base, constraints) = ir.distribute_constraints(&input);
-
-        assert_eq!(base, &expected_base);
-        assert_eq!(constraints, expected_constraints);
-    }
 }
