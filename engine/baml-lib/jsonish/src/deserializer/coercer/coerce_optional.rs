@@ -13,7 +13,7 @@ pub(super) fn coerce_optional(
     optional_target: &FieldType,
     value: Option<&crate::jsonish::Value>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
-    assert!(matches!(optional_target, FieldType::Optional(_)));
+    assert!(matches!(optional_target, FieldType::Optional(_, _)));
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
         name = optional_target.to_string(),
@@ -22,7 +22,7 @@ pub(super) fn coerce_optional(
     );
 
     let inner = match optional_target {
-        FieldType::Optional(inner) => inner,
+        FieldType::Optional(inner, _) => inner,
         _ => unreachable!(),
     };
 

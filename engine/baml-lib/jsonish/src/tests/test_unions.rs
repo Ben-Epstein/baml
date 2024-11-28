@@ -266,7 +266,7 @@ test_deserializer!(
   test_phone_number_regex,
   CONTACT_INFO,
   r#"{"primary": {"value": "908-797-8281"}}"#,
-  FieldType::Class("ContactInfo".to_string()),
+  FieldType::class("ContactInfo"),
   {"primary": {"value": "908-797-8281"}}
 );
 
@@ -274,6 +274,6 @@ test_deserializer!(
   test_email_regex,
   CONTACT_INFO,
   r#"{"primary": {"value": "help@boundaryml.com"}}"#,
-  FieldType::Class("ContactInfo".to_string()),
+  FieldType::class("ContactInfo"),
   {"primary": {"value": "help@boundaryml.com"}}
 );

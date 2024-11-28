@@ -186,7 +186,7 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Class(cls, _), constraints) => {
+            (FieldType::Class(cls, meta), constraints) => {
                 if checked_types.insert(output.to_string()) {
                     let walker = ir.find_class(&cls);
 
@@ -227,6 +227,7 @@ fn relevant_data_models<'a>(
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), walker?.alias(env_values)?),
                         fields,
+                        type_metadata: Some(meta.clone())
                     });
                 }
             }

@@ -61,7 +61,10 @@ impl TypeCoercer for Class {
         let constraints = ctx
             .of
             .find_class(self.name.real_name())
-            .map_or(vec![], |class| class.constraints.clone());
+            .as_ref()
+            .ok()
+            .and_then(|class| class.type_metadata.as_ref().map(|m| m.constraints.clone()))
+            .unwrap_or(Vec::new());
 
         let mut optional_values = optional
             .iter()
@@ -354,11 +357,7 @@ pub fn apply_constraints(
     let res = if constraints.is_empty() {
         Ok(value)
     } else {
-        let constrained_class = FieldType::Constrained {
-            base: Box::new(class_type.clone()),
-            constraints,
-        };
-        let constraint_results = run_user_checks(&value.clone().into(), &constrained_class)
+        let constraint_results = run_user_checks(&value.clone().into(), &class_type)
             .map_err(|e| ParsingError {
                 reason: format!("Failed to evaluate constraints: {:?}", e),
                 scope,

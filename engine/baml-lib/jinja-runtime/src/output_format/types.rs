@@ -49,6 +49,7 @@ pub struct Class {
     pub name: Name,
     // fields have name, type and description.
     pub fields: Vec<(Name, FieldType, Option<String>)>,
+    pub type_metadata: Option<TypeMetadata>,
 }
 
 #[derive(Debug, Clone)]
@@ -728,7 +729,7 @@ mod tests {
                     Some("The person's age".to_string()),
                 ),
             ],
-            // constraints: Vec::new(),
+            type_metadata: None,
         }];
 
         let content = OutputFormatContent::target(FieldType::class("Person"))
@@ -760,6 +761,7 @@ mod tests {
                 ),
                 (Name::new("year".to_string()), FieldType::int(), None),
             ],
+            type_metadata: None,
         }];
 
         let content = OutputFormatContent::target(FieldType::class("Education"))
@@ -787,6 +789,7 @@ mod tests {
                     ),
                     (Name::new("severity".to_string()), FieldType::string(), None),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Enhancement".to_string()),
@@ -798,6 +801,7 @@ mod tests {
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Documentation".to_string()),
@@ -805,6 +809,7 @@ mod tests {
                     (Name::new("module".to_string()), FieldType::string(), None),
                     (Name::new("format".to_string()), FieldType::string(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -852,6 +857,7 @@ r#"Answer in JSON using any of these schemas:
                     ),
                     (Name::new("date".to_string()), FieldType::string(), None),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Bug".to_string()),
@@ -863,6 +869,7 @@ r#"Answer in JSON using any of these schemas:
                     ),
                     (Name::new("severity".to_string()), FieldType::string(), None),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Enhancement".to_string()),
@@ -874,6 +881,7 @@ r#"Answer in JSON using any of these schemas:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Documentation".to_string()),
@@ -881,6 +889,7 @@ r#"Answer in JSON using any of these schemas:
                     (Name::new("module".to_string()), FieldType::string(), None),
                     (Name::new("format".to_string()), FieldType::string(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -922,6 +931,7 @@ r#"Answer in JSON using this schema:
                     None,
                 ),
             ],
+            type_metadata: None,
         }];
 
         let content = OutputFormatContent::target(FieldType::class("Node"))
@@ -956,6 +966,7 @@ Answer in JSON using this schema: Node"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("LinkedList".to_string()),
@@ -967,6 +978,7 @@ Answer in JSON using this schema: Node"#
                     ),
                     (Name::new("len".to_string()), FieldType::int(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1003,6 +1015,7 @@ Answer in JSON using this schema:
                     FieldType::class("B"),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("B".to_string()),
@@ -1011,6 +1024,7 @@ Answer in JSON using this schema:
                     FieldType::class("C"),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("C".to_string()),
@@ -1019,6 +1033,7 @@ Answer in JSON using this schema:
                     FieldType::optional(FieldType::class("A")),
                     None,
                 )],
+                type_metadata: None,
             },
         ];
 
@@ -1060,6 +1075,7 @@ Answer in JSON using this schema: A"#
                     FieldType::class("B"),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("B".to_string()),
@@ -1068,6 +1084,7 @@ Answer in JSON using this schema: A"#
                     FieldType::class("C"),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("C".to_string()),
@@ -1076,6 +1093,7 @@ Answer in JSON using this schema: A"#
                     FieldType::optional(FieldType::class("A")),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1088,6 +1106,7 @@ Answer in JSON using this schema: A"#
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1141,6 +1160,7 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("B".to_string()),
@@ -1149,6 +1169,7 @@ Answer in JSON using this schema:
                     FieldType::class("C"),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("C".to_string()),
@@ -1157,6 +1178,7 @@ Answer in JSON using this schema:
                     FieldType::optional(FieldType::class("A")),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1169,6 +1191,7 @@ Answer in JSON using this schema:
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Nested".to_string()),
@@ -1176,6 +1199,7 @@ Answer in JSON using this schema:
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1229,6 +1253,7 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Forest".to_string()),
@@ -1237,6 +1262,7 @@ Answer in JSON using this schema:
                     FieldType::list(FieldType::class("Tree")),
                     None,
                 )],
+                type_metadata: None,
             },
         ];
 
@@ -1278,6 +1304,7 @@ Answer in JSON using this schema: Tree"#
                 ], TypeMetadata::default()),
                 None,
             )],
+            type_metadata: None,
         }];
 
         let content = OutputFormatContent::target(FieldType::class("SelfReferential"))
@@ -1313,6 +1340,7 @@ Answer in JSON using this schema: SelfReferential"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1324,6 +1352,7 @@ Answer in JSON using this schema: SelfReferential"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1375,6 +1404,7 @@ Node or Tree"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -1386,6 +1416,7 @@ Node or Tree"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1397,6 +1428,7 @@ Node or Tree"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1444,6 +1476,7 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1455,6 +1488,7 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1462,6 +1496,7 @@ Answer in JSON using this schema:
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("tag".to_string()), FieldType::string(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1521,6 +1556,7 @@ Node or Tree or {
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -1532,6 +1568,7 @@ Node or Tree or {
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1543,6 +1580,7 @@ Node or Tree or {
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1550,6 +1588,7 @@ Node or Tree or {
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("tag".to_string()), FieldType::string(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1597,6 +1636,7 @@ Answer in JSON using this schema:
                     FieldType::class("B"),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("B".to_string()),
@@ -1605,6 +1645,7 @@ Answer in JSON using this schema:
                     FieldType::class("C"),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("C".to_string()),
@@ -1613,6 +1654,7 @@ Answer in JSON using this schema:
                     FieldType::optional(FieldType::class("A")),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1625,6 +1667,7 @@ Answer in JSON using this schema:
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1676,6 +1719,7 @@ Answer in JSON using this interface:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1687,6 +1731,7 @@ Answer in JSON using this interface:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1733,6 +1778,7 @@ Node or int or string or Tree"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1744,6 +1790,7 @@ Node or int or string or Tree"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1759,6 +1806,7 @@ Node or int or string or Tree"#
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1805,6 +1853,7 @@ Answer in JSON using this schema:
                     None,
                 ),
             ],
+            type_metadata: None,
         }];
 
         let content = OutputFormatContent::target(FieldType::list(FieldType::class("Node")))
@@ -1836,6 +1885,7 @@ Node[]"#
                 FieldType::map(FieldType::string(), FieldType::class("RecursiveMap")),
                 None,
             )],
+            type_metadata: None,
         }];
 
         let content = OutputFormatContent::target(FieldType::class("RecursiveMap"))
@@ -1866,6 +1916,7 @@ Answer in JSON using this schema: RecursiveMap"#
                     FieldType::map(FieldType::string(), FieldType::class("RecursiveMap")),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1874,6 +1925,7 @@ Answer in JSON using this schema: RecursiveMap"#
                     FieldType::Class("RecursiveMap".to_string(), TypeMetadata::default()),
                     None,
                 )],
+                type_metadata: None,
             },
         ];
 
@@ -1910,6 +1962,7 @@ Answer in JSON using this schema:
                     None,
                 ),
             ],
+            type_metadata: None,
         }];
 
         let content = OutputFormatContent::target(FieldType::map(
@@ -1945,6 +1998,7 @@ map<string, Node>"#
                     FieldType::map(FieldType::string(), FieldType::class("Node")),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -1956,6 +2010,7 @@ map<string, Node>"#
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -1994,6 +2049,7 @@ Answer in JSON using this schema:
                     ),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -2005,6 +2061,7 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -2043,6 +2100,7 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -2050,6 +2108,7 @@ Answer in JSON using this schema:
                     (Name::new("field".to_string()), FieldType::string(), None),
                     (Name::new("data".to_string()), FieldType::int(), None),
                 ],
+                type_metadata: None,
             },
         ];
 
@@ -2100,6 +2159,7 @@ map<string, Node or int or {
                     ),
                     None,
                 )],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -2111,6 +2171,7 @@ map<string, Node or int or {
                         None,
                     ),
                 ],
+                type_metadata: None,
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -2118,6 +2179,7 @@ map<string, Node or int or {
                     (Name::new("field".to_string()), FieldType::string(), None),
                     (Name::new("data".to_string()), FieldType::int(), None),
                 ],
+                type_metadata: None,
             },
         ];
 

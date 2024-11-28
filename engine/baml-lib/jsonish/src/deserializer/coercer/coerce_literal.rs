@@ -1,7 +1,7 @@
 use std::vec;
 
 use anyhow::Result;
-use baml_types::LiteralValue;
+use baml_types::{LiteralValue, TypeMetadata};
 use internal_baml_core::ir::FieldType;
 
 use crate::{
@@ -21,7 +21,7 @@ impl TypeCoercer for LiteralValue {
         target: &FieldType,
         value: Option<&jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError> {
-        assert!(matches!(target, FieldType::Literal(_)));
+        assert!(matches!(target, FieldType::Literal(_, _)));
 
         log::debug!(
             "scope: {scope} :: coercing to: {name:?} (current: {current})",
@@ -31,10 +31,10 @@ impl TypeCoercer for LiteralValue {
         );
 
         let literal = match target {
-            FieldType::Literal(literal) if literal == self => literal,
+            FieldType::Literal(literal, _) if literal == self => literal,
             // Received non-literal type or literal value doesn't match expected value.
             _ => {
-                return Err(ctx.error_unexpected_type(&FieldType::Literal(self.clone()), target));
+                return Err(ctx.error_unexpected_type(&FieldType::Literal(self.clone(), TypeMetadata::default()), target));
             }
         };
 
