@@ -233,10 +233,6 @@ pub struct NodeAttributes {
     ///   - @alias(...) becomes ("alias", ...)
     meta: IndexMap<String, UnresolvedValue<()>>,
 
-    // A parsed representation of attributes on a type or a field that
-    // modify the type.
-    pub type_metadata: TypeMetadata,
-
     // Spans
     pub span: Option<ast::Span>,
 }
@@ -251,7 +247,6 @@ impl Default for NodeAttributes {
     fn default() -> Self {
         NodeAttributes {
             meta: IndexMap::new(),
-            type_metadata: TypeMetadata::default(),
             span: None,
         }
     }
@@ -397,7 +392,7 @@ impl WithRepr<FieldType> for ast::FieldType {
         };
         let attributes = NodeAttributes {
             meta: IndexMap::new(),
-            type_metadata: TypeMetadata { constraints, streaming_behavior },
+            // type_metadata: TypeMetadata { constraints, streaming_behavior },
             span: Some(self.span().clone()),
         };
 
@@ -405,7 +400,46 @@ impl WithRepr<FieldType> for ast::FieldType {
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
-        let NodeAttributes { type_metadata, .. } = WithRepr::attributes(self, db);
+
+        let constraints = self
+            .attributes()
+            .iter()
+            .filter_map(|attr| {
+                let level = match attr.name.to_string().as_str() {
+                    "assert" => Some(ConstraintLevel::Assert),
+                    "check" => Some(ConstraintLevel::Check),
+                    _ => None,
+                }?;
+                let (label, expression) = match attr.arguments.arguments.as_slice() {
+                    [arg1, arg2] => match (arg1.clone().value, arg2.clone().value) {
+                        (
+                            ast::Expression::Identifier(ast::Identifier::Local(s, _)),
+                            ast::Expression::JinjaExpressionValue(j, _),
+                        ) => Some((Some(s), j)),
+                        _ => None,
+                    },
+                    [arg1] => match arg1.clone().value {
+                        ast::Expression::JinjaExpressionValue(JinjaExpression(j), _) => {
+                            Some((None, JinjaExpression(j.clone())))
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }?;
+                Some(Constraint {
+                    level,
+                    expression,
+                    label,
+                })
+            })
+            .collect::<Vec<Constraint>>();
+        let streaming_behavior = StreamingBehavior {
+            done: self.attributes().iter().find(|attr| attr.name() == "streaming::done").is_some(),
+            needed: self.attributes().iter().find(|attr| attr.name() == "streaming::needed").is_some(),
+            state: self.attributes().iter().find(|attr| attr.name() == "streaming::state").is_some(),
+        };
+        let type_metadata = TypeMetadata { constraints, streaming_behavior };
+
         // let constraints = WithRepr::attributes(self, db).type_metadata.constraints;
         let has_constraints = type_metadata.constraints.len() > 0;
         let base = match self {
@@ -518,7 +552,6 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-            type_metadata: TypeMetadata::default(),
             span: Some(self.span().clone()),
         }
     }
@@ -563,7 +596,6 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
         let (meta, type_metadata) = to_ir_attributes(db, self.get_default_attributes());
         let attributes = NodeAttributes {
             meta,
-            type_metadata,
             span: Some(self.span().clone()),
         };
 
@@ -580,7 +612,6 @@ impl WithRepr<Enum> for EnumWalker<'_> {
         let (meta, type_metadata) = to_ir_attributes(db, self.get_default_attributes(SubType::Enum));
         let attributes = NodeAttributes {
             meta,
-            type_metadata,
             span: Some(self.span().clone()),
         };
 
@@ -617,7 +648,6 @@ impl WithRepr<Field> for FieldWalker<'_> {
         let (meta, type_metadata) = to_ir_attributes(db, self.get_default_attributes());
         let attributes = NodeAttributes {
             meta,
-            type_metadata,
             span: Some(self.span().clone()),
         };
 
@@ -668,7 +698,6 @@ impl WithRepr<Class> for ClassWalker<'_> {
         let (meta, type_metadata) = to_ir_attributes(db, default_attributes);
         let attributes = NodeAttributes {
             meta,
-            type_metadata,
             span: Some(self.span().clone()),
         };
 
@@ -851,7 +880,6 @@ impl WithRepr<Function> for FunctionWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: Default::default(),
-            type_metadata: TypeMetadata::default(),
             span: Some(self.span().clone()),
         }
     }
@@ -908,7 +936,6 @@ impl WithRepr<Client> for ClientWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            type_metadata: TypeMetadata::default(),
             span: Some(self.span().clone()),
         }
     }
@@ -947,7 +974,6 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             meta: IndexMap::new(),
-            type_metadata: TypeMetadata::default(),
             span: Some(self.span().clone()),
         }
     }
@@ -986,21 +1012,8 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
         let span = self.0.test_case().functions[self.1].1.clone();
 
-        // TODO: Do we need this?
-        let constraints = self
-            .0
-            .test_case()
-            .constraints
-            .iter()
-            .map(|(c, _, _)| c)
-            .cloned()
-            .collect();
         NodeAttributes {
             meta: IndexMap::new(),
-            type_metadata: TypeMetadata {
-                constraints,
-                streaming_behavior: StreamingBehavior::default(),
-            },
             span: Some(span),
         }
     }
@@ -1014,20 +1027,9 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
 
 impl WithRepr<TestCase> for ConfigurationWalker<'_> {
     fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
-        let constraints = self
-            .test_case()
-            .constraints
-            .iter()
-            .map(|(c, _, _)| c)
-            .cloned()
-            .collect();
         NodeAttributes {
             meta: IndexMap::new(),
             span: Some(self.span().clone()),
-            type_metadata: TypeMetadata {
-                constraints,
-                streaming_behavior: StreamingBehavior::default(),
-            },
         }
     }
 
@@ -1035,6 +1037,13 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
         let functions = (0..self.test_case().functions.len())
             .map(|i| (self, i).node(db))
             .collect::<Result<Vec<_>>>()?;
+        let constraints = self
+            .test_case()
+            .constraints
+            .iter()
+            .map(|(c, _, _)| c)
+            .cloned()
+            .collect();
         Ok(TestCase {
             name: self.name().to_string(),
             args: self
@@ -1044,13 +1053,7 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
                 .map(|(k, (_, v))| Ok((k.clone(), v.without_meta())))
                 .collect::<Result<IndexMap<_, _>>>()?,
             functions,
-            constraints: <AstWalker<'_, (ValExpId, &str)> as WithRepr<TestCase>>::attributes(
-                self, db,
-            )
-            .type_metadata
-            .constraints
-            .into_iter()
-            .collect::<Vec<_>>(),
+            constraints
         })
     }
 }

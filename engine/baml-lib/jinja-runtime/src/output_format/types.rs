@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{Constraint, FieldType, TypeValue};
+use baml_types::{Constraint, FieldType, TypeMetadata, TypeValue};
 use indexmap::{IndexMap, IndexSet};
 
 #[derive(Debug)]
@@ -34,7 +34,6 @@ impl Name {
     }
 }
 
-// TODO: (Greg) Enum needs to carry its constraints.
 #[derive(Debug)]
 pub struct Enum {
     pub name: Name,
@@ -50,7 +49,6 @@ pub struct Class {
     pub name: Name,
     // fields have name, type and description.
     pub fields: Vec<(Name, FieldType, Option<String>)>,
-    pub constraints: Vec<Constraint>,
 }
 
 #[derive(Debug, Clone)]
@@ -311,14 +309,14 @@ impl OutputFormatContent {
             output_format_content: &OutputFormatContent,
         ) -> Option<String> {
             match ft {
-                FieldType::Primitive(TypeValue::String) => None,
-                FieldType::Primitive(p) => Some(format!(
+                FieldType::Primitive(TypeValue::String, _) => None,
+                FieldType::Primitive(p, _) => Some(format!(
                     "Answer as {article} ",
                     article = indefinite_article_a_or_an(&p.to_string())
                 )),
-                FieldType::Literal(_) => Some(String::from("Answer using this specific value:\n")),
-                FieldType::Enum(_) => Some(String::from("Answer with any of the categories:\n")),
-                FieldType::Class(cls) => {
+                FieldType::Literal(_, _) => Some(String::from("Answer using this specific value:\n")),
+                FieldType::Enum(_, _) => Some(String::from("Answer with any of the categories:\n")),
+                FieldType::Class(cls, _) => {
                     let type_prefix = match &options.hoisted_class_prefix {
                         RenderSetting::Always(prefix) if !prefix.is_empty() => prefix,
                         _ => RenderOptions::DEFAULT_TYPE_PREFIX_IN_RENDER_MESSAGE,
@@ -333,18 +331,15 @@ impl OutputFormatContent {
 
                     Some(format!("Answer in JSON using this {type_prefix}:{end}"))
                 }
-                FieldType::List(_) => Some(String::from(
+                FieldType::List(_, _) => Some(String::from(
                     "Answer with a JSON Array using this schema:\n",
                 )),
-                FieldType::Union(_) => {
+                FieldType::Union(_, _) => {
                     Some(String::from("Answer in JSON using any of these schemas:\n"))
                 }
-                FieldType::Optional(_) => Some(String::from("Answer in JSON using this schema:\n")),
-                FieldType::Map(_, _) => Some(String::from("Answer in JSON using this schema:\n")),
-                FieldType::Tuple(_) => None,
-                FieldType::Constrained { base, .. } => {
-                    auto_prefix(base, options, output_format_content)
-                }
+                FieldType::Optional(_, _) => Some(String::from("Answer in JSON using this schema:\n")),
+                FieldType::Map(_, _, _) => Some(String::from("Answer in JSON using this schema:\n")),
+                FieldType::Tuple(_, _) => None,
             }
         }
 
@@ -393,7 +388,7 @@ impl OutputFormatContent {
         group_hoisted_literals: bool,
     ) -> Result<String, minijinja::Error> {
         match field_type {
-            FieldType::Class(nested_class) if self.recursive_classes.contains(nested_class) => {
+            FieldType::Class(nested_class, _) if self.recursive_classes.contains(nested_class) => {
                 Ok(nested_class.to_owned())
             }
 
@@ -409,7 +404,7 @@ impl OutputFormatContent {
         group_hoisted_literals: bool,
     ) -> Result<String, minijinja::Error> {
         Ok(match field {
-            FieldType::Primitive(t) => match t {
+            FieldType::Primitive(t, _) => match t {
                 TypeValue::String => "string".to_string(),
                 TypeValue::Int => "int".to_string(),
                 TypeValue::Float => "float".to_string(),
@@ -422,11 +417,8 @@ impl OutputFormatContent {
                     ))
                 }
             },
-            FieldType::Literal(v) => v.to_string(),
-            FieldType::Constrained { base, .. } => {
-                self.inner_type_render(options, base, render_state, group_hoisted_literals)?
-            }
-            FieldType::Enum(e) => {
+            FieldType::Literal(v, _) => v.to_string(),
+            FieldType::Enum(e, _) => {
                 let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
@@ -452,7 +444,7 @@ impl OutputFormatContent {
                     enm.name.rendered_name().to_string()
                 }
             }
-            FieldType::Class(cls) => {
+            FieldType::Class(cls, _) => {
                 let Some(class) = self.classes.get(cls) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
@@ -481,9 +473,9 @@ impl OutputFormatContent {
                 }
                 .to_string()
             }
-            FieldType::List(inner) => {
+            FieldType::List(inner, _) => {
                 let is_recursive = match inner.as_ref() {
-                    FieldType::Class(nested_class) => self.recursive_classes.contains(nested_class),
+                    FieldType::Class(nested_class, _) => self.recursive_classes.contains(nested_class),
                     _ => false,
                 };
 
@@ -492,25 +484,25 @@ impl OutputFormatContent {
 
                 if !is_recursive
                     && match inner.as_ref() {
-                        FieldType::Primitive(_) => false,
-                        FieldType::Optional(t) => !t.is_primitive(),
-                        FieldType::Enum(_e) => inner_str.len() > 15,
+                        FieldType::Primitive(_, _) => false,
+                        FieldType::Optional(t, _) => !t.is_primitive(),
+                        FieldType::Enum(_e, _) => inner_str.len() > 15,
                         _ => true,
                     }
                 {
                     format!("[\n  {}\n]", inner_str.replace('\n', "\n  "))
-                } else if matches!(inner.as_ref(), FieldType::Optional(_)) {
+                } else if matches!(inner.as_ref(), FieldType::Optional(_, _)) {
                     format!("({})[]", inner_str)
                 } else {
                     format!("{}[]", inner_str)
                 }
             }
-            FieldType::Union(items) => items
+            FieldType::Union(items, _) => items
                 .iter()
                 .map(|t| self.render_possibly_recursive_type(options, t, render_state, false))
                 .collect::<Result<Vec<_>, minijinja::Error>>()?
                 .join(&options.or_splitter),
-            FieldType::Optional(inner) => {
+            FieldType::Optional(inner, _) => {
                 let inner_str =
                     self.render_possibly_recursive_type(options, inner, render_state, false)?;
                 if inner.is_optional() {
@@ -519,13 +511,13 @@ impl OutputFormatContent {
                     format!("{inner_str}{}null", options.or_splitter)
                 }
             }
-            FieldType::Tuple(_) => {
+            FieldType::Tuple(_, _) => {
                 return Err(minijinja::Error::new(
                     minijinja::ErrorKind::BadSerialization,
                     "Tuple type is not supported in outputs",
                 ))
             }
-            FieldType::Map(key_type, value_type) => MapRender {
+            FieldType::Map(key_type, value_type, _) => MapRender {
                 style: &options.map_style,
                 // TODO: Key can't be recursive because we only support strings
                 // as keys. Change this if needed in the future.
@@ -552,8 +544,8 @@ impl OutputFormatContent {
         };
 
         let mut message = match &self.target {
-            FieldType::Primitive(TypeValue::String) if prefix.is_none() => None,
-            FieldType::Enum(e) => {
+            FieldType::Primitive(TypeValue::String, _) if prefix.is_none() => None,
+            FieldType::Enum(e, _) => {
                 let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
@@ -568,7 +560,7 @@ impl OutputFormatContent {
 
         // Top level recursive classes will just use their name instead of the
         // entire schema which should already be hoisted.
-        if let FieldType::Class(class) = &self.target {
+        if let FieldType::Class(class, _) = &self.target {
             if self.recursive_classes.contains(class) {
                 message = Some(class.to_owned());
             }
@@ -588,7 +580,7 @@ impl OutputFormatContent {
         for class_name in self.recursive_classes.iter() {
             let schema = self.inner_type_render(
                 &options,
-                &FieldType::Class(class_name.to_owned()),
+                &FieldType::Class(class_name.to_owned(), TypeMetadata::default()), // TODO: Ok to use default here?
                 &mut render_state,
                 false,
             )?;
@@ -637,7 +629,7 @@ impl OutputFormatContent {
 #[cfg(test)]
 impl OutputFormatContent {
     pub fn new_array() -> Self {
-        Self::target(FieldType::List(Box::new(FieldType::string()))).build()
+        Self::target(FieldType::List(Box::new(FieldType::string()), TypeMetadata::default())).build()
     }
 
     pub fn new_string() -> Self {
@@ -708,7 +700,7 @@ mod tests {
             constraints: Vec::new(),
         }];
 
-        let content = OutputFormatContent::target(FieldType::Enum("Color".to_string()))
+        let content = OutputFormatContent::target(FieldType::Enum("Color".to_string(), TypeMetadata::default()))
             .enums(enums)
             .build();
         let rendered = content.render(RenderOptions::default()).unwrap();
@@ -736,7 +728,7 @@ mod tests {
                     Some("The person's age".to_string()),
                 ),
             ],
-            constraints: Vec::new(),
+            // constraints: Vec::new(),
         }];
 
         let content = OutputFormatContent::target(FieldType::class("Person"))
@@ -768,7 +760,6 @@ mod tests {
                 ),
                 (Name::new("year".to_string()), FieldType::int(), None),
             ],
-            constraints: Vec::new(),
         }];
 
         let content = OutputFormatContent::target(FieldType::class("Education"))
@@ -796,7 +787,6 @@ mod tests {
                     ),
                     (Name::new("severity".to_string()), FieldType::string(), None),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Enhancement".to_string()),
@@ -808,7 +798,6 @@ mod tests {
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Documentation".to_string()),
@@ -816,7 +805,6 @@ mod tests {
                     (Name::new("module".to_string()), FieldType::string(), None),
                     (Name::new("format".to_string()), FieldType::string(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -824,7 +812,7 @@ mod tests {
             FieldType::class("Bug"),
             FieldType::class("Enhancement"),
             FieldType::class("Documentation"),
-        ]))
+        ], TypeMetadata::default()))
         .classes(classes)
         .build();
         let rendered = content.render(RenderOptions::default()).unwrap();
@@ -859,12 +847,11 @@ r#"Answer in JSON using any of these schemas:
                             FieldType::class("Bug"),
                             FieldType::class("Enhancement"),
                             FieldType::class("Documentation"),
-                        ]),
+                        ], TypeMetadata::default()),
                         None,
                     ),
                     (Name::new("date".to_string()), FieldType::string(), None),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Bug".to_string()),
@@ -876,7 +863,6 @@ r#"Answer in JSON using any of these schemas:
                     ),
                     (Name::new("severity".to_string()), FieldType::string(), None),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Enhancement".to_string()),
@@ -888,7 +874,6 @@ r#"Answer in JSON using any of these schemas:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Documentation".to_string()),
@@ -896,7 +881,6 @@ r#"Answer in JSON using any of these schemas:
                     (Name::new("module".to_string()), FieldType::string(), None),
                     (Name::new("format".to_string()), FieldType::string(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -938,7 +922,6 @@ r#"Answer in JSON using this schema:
                     None,
                 ),
             ],
-            constraints: Vec::new(),
         }];
 
         let content = OutputFormatContent::target(FieldType::class("Node"))
@@ -973,7 +956,6 @@ Answer in JSON using this schema: Node"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("LinkedList".to_string()),
@@ -985,7 +967,6 @@ Answer in JSON using this schema: Node"#
                     ),
                     (Name::new("len".to_string()), FieldType::int(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1022,7 +1003,6 @@ Answer in JSON using this schema:
                     FieldType::class("B"),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("B".to_string()),
@@ -1031,7 +1011,6 @@ Answer in JSON using this schema:
                     FieldType::class("C"),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("C".to_string()),
@@ -1040,7 +1019,6 @@ Answer in JSON using this schema:
                     FieldType::optional(FieldType::class("A")),
                     None,
                 )],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1082,7 +1060,6 @@ Answer in JSON using this schema: A"#
                     FieldType::class("B"),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("B".to_string()),
@@ -1091,7 +1068,6 @@ Answer in JSON using this schema: A"#
                     FieldType::class("C"),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("C".to_string()),
@@ -1100,7 +1076,6 @@ Answer in JSON using this schema: A"#
                     FieldType::optional(FieldType::class("A")),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1113,7 +1088,6 @@ Answer in JSON using this schema: A"#
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1167,7 +1141,6 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("B".to_string()),
@@ -1176,7 +1149,6 @@ Answer in JSON using this schema:
                     FieldType::class("C"),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("C".to_string()),
@@ -1185,7 +1157,6 @@ Answer in JSON using this schema:
                     FieldType::optional(FieldType::class("A")),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1198,7 +1169,6 @@ Answer in JSON using this schema:
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Nested".to_string()),
@@ -1206,7 +1176,6 @@ Answer in JSON using this schema:
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1260,7 +1229,6 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Forest".to_string()),
@@ -1269,7 +1237,6 @@ Answer in JSON using this schema:
                     FieldType::list(FieldType::class("Tree")),
                     None,
                 )],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1308,10 +1275,9 @@ Answer in JSON using this schema: Tree"#
                     FieldType::int(),
                     FieldType::string(),
                     FieldType::optional(FieldType::class("SelfReferential")),
-                ]),
+                ], TypeMetadata::default()),
                 None,
             )],
-            constraints: Vec::new(),
         }];
 
         let content = OutputFormatContent::target(FieldType::class("SelfReferential"))
@@ -1347,7 +1313,6 @@ Answer in JSON using this schema: SelfReferential"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1359,14 +1324,13 @@ Answer in JSON using this schema: SelfReferential"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
         let content = OutputFormatContent::target(FieldType::Union(vec![
             FieldType::class("Node"),
             FieldType::class("Tree"),
-        ]))
+        ], TypeMetadata::default()))
         .classes(classes)
         .recursive_classes(IndexSet::from_iter(
             ["Node", "Tree"].map(ToString::to_string),
@@ -1401,7 +1365,7 @@ Node or Tree"#
                 fields: vec![
                     (
                         Name::new("data_type".to_string()),
-                        FieldType::Union(vec![FieldType::class("Node"), FieldType::class("Tree")]),
+                        FieldType::Union(vec![FieldType::class("Node"), FieldType::class("Tree")], TypeMetadata::default()),
                         None,
                     ),
                     (Name::new("len".to_string()), FieldType::int(), None),
@@ -1411,7 +1375,6 @@ Node or Tree"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -1423,7 +1386,6 @@ Node or Tree"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1435,7 +1397,6 @@ Node or Tree"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1483,7 +1444,6 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1495,7 +1455,6 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1503,7 +1462,6 @@ Answer in JSON using this schema:
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("tag".to_string()), FieldType::string(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1511,7 +1469,7 @@ Answer in JSON using this schema:
             FieldType::class("Node"),
             FieldType::class("Tree"),
             FieldType::class("NonRecursive"),
-        ]))
+        ], TypeMetadata::default()))
         .classes(classes)
         .recursive_classes(IndexSet::from_iter(
             ["Node", "Tree"].map(ToString::to_string),
@@ -1553,7 +1511,7 @@ Node or Tree or {
                             FieldType::class("Node"),
                             FieldType::class("Tree"),
                             FieldType::class("NonRecursive"),
-                        ]),
+                        ], TypeMetadata::default()),
                         None,
                     ),
                     (Name::new("len".to_string()), FieldType::int(), None),
@@ -1563,7 +1521,6 @@ Node or Tree or {
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -1575,7 +1532,6 @@ Node or Tree or {
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1587,7 +1543,6 @@ Node or Tree or {
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1595,7 +1550,6 @@ Node or Tree or {
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("tag".to_string()), FieldType::string(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1643,7 +1597,6 @@ Answer in JSON using this schema:
                     FieldType::class("B"),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("B".to_string()),
@@ -1652,7 +1605,6 @@ Answer in JSON using this schema:
                     FieldType::class("C"),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("C".to_string()),
@@ -1661,7 +1613,6 @@ Answer in JSON using this schema:
                     FieldType::optional(FieldType::class("A")),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1674,7 +1625,6 @@ Answer in JSON using this schema:
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1726,7 +1676,6 @@ Answer in JSON using this interface:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1738,14 +1687,13 @@ Answer in JSON using this interface:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
         let content = OutputFormatContent::target(FieldType::Union(vec![
-            FieldType::Union(vec![FieldType::class("Node"), FieldType::int()]),
-            FieldType::Union(vec![FieldType::string(), FieldType::class("Tree")]),
-        ]))
+            FieldType::Union(vec![FieldType::class("Node"), FieldType::int()], TypeMetadata::default()),
+            FieldType::Union(vec![FieldType::string(), FieldType::class("Tree")], TypeMetadata::default()),
+        ], TypeMetadata::default()))
         .classes(classes)
         .recursive_classes(IndexSet::from_iter(
             ["Node", "Tree"].map(ToString::to_string),
@@ -1785,7 +1733,6 @@ Node or int or string or Tree"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Tree".to_string()),
@@ -1797,7 +1744,6 @@ Node or int or string or Tree"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -1805,15 +1751,14 @@ Node or int or string or Tree"#
                     (
                         Name::new("the_union".to_string()),
                         FieldType::Union(vec![
-                            FieldType::Union(vec![FieldType::class("Node"), FieldType::int()]),
-                            FieldType::Union(vec![FieldType::string(), FieldType::class("Tree")]),
-                        ]),
+                            FieldType::Union(vec![FieldType::class("Node"), FieldType::int()], TypeMetadata::default()),
+                            FieldType::Union(vec![FieldType::string(), FieldType::class("Tree")], TypeMetadata::default()),
+                        ], TypeMetadata::default()),
                         None,
                     ),
                     (Name::new("data".to_string()), FieldType::int(), None),
                     (Name::new("field".to_string()), FieldType::bool(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1860,7 +1805,6 @@ Answer in JSON using this schema:
                     None,
                 ),
             ],
-            constraints: Vec::new(),
         }];
 
         let content = OutputFormatContent::target(FieldType::list(FieldType::class("Node")))
@@ -1892,7 +1836,6 @@ Node[]"#
                 FieldType::map(FieldType::string(), FieldType::class("RecursiveMap")),
                 None,
             )],
-            constraints: Vec::new(),
         }];
 
         let content = OutputFormatContent::target(FieldType::class("RecursiveMap"))
@@ -1923,16 +1866,14 @@ Answer in JSON using this schema: RecursiveMap"#
                     FieldType::map(FieldType::string(), FieldType::class("RecursiveMap")),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
                 fields: vec![(
                     Name::new("rec_map".to_string()),
-                    FieldType::Class("RecursiveMap".to_string()),
+                    FieldType::Class("RecursiveMap".to_string(), TypeMetadata::default()),
                     None,
                 )],
-                constraints: Vec::new(),
             },
         ];
 
@@ -1969,7 +1910,6 @@ Answer in JSON using this schema:
                     None,
                 ),
             ],
-            constraints: Vec::new(),
         }];
 
         let content = OutputFormatContent::target(FieldType::map(
@@ -2005,7 +1945,6 @@ map<string, Node>"#
                     FieldType::map(FieldType::string(), FieldType::class("Node")),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -2017,7 +1956,6 @@ map<string, Node>"#
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -2056,7 +1994,6 @@ Answer in JSON using this schema:
                     ),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -2068,7 +2005,6 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -2107,7 +2043,6 @@ Answer in JSON using this schema:
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -2115,7 +2050,6 @@ Answer in JSON using this schema:
                     (Name::new("field".to_string()), FieldType::string(), None),
                     (Name::new("data".to_string()), FieldType::int(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 
@@ -2166,7 +2100,6 @@ map<string, Node or int or {
                     ),
                     None,
                 )],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("Node".to_string()),
@@ -2178,7 +2111,6 @@ map<string, Node or int or {
                         None,
                     ),
                 ],
-                constraints: Vec::new(),
             },
             Class {
                 name: Name::new("NonRecursive".to_string()),
@@ -2186,7 +2118,6 @@ map<string, Node or int or {
                     (Name::new("field".to_string()), FieldType::string(), None),
                     (Name::new("data".to_string()), FieldType::int(), None),
                 ],
-                constraints: Vec::new(),
             },
         ];
 

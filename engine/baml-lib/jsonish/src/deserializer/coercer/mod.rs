@@ -187,8 +187,8 @@ impl ParsingContext<'_> {
             reason: format!(
                 "Expected {}, got {:?}.",
                 match target {
-                    FieldType::Enum(_) => format!("{} enum value", target),
-                    FieldType::Class(_) => format!("{}", target),
+                    FieldType::Enum(_, _) => format!("{} enum value", target),
+                    FieldType::Class(_, _) => format!("{}", target),
                     _ => format!("{target}"),
                 },
                 got
@@ -270,14 +270,12 @@ pub fn run_user_checks(
     baml_value: &BamlValue,
     type_: &FieldType,
 ) -> Result<Vec<(Constraint, bool)>> {
-    match type_ {
-        FieldType::Constrained { constraints, .. } => constraints
-            .iter()
-            .map(|constraint| {
-                let result = evaluate_predicate(baml_value, &constraint.expression)?;
-                Ok((constraint.clone(), result))
-            })
-            .collect::<Result<Vec<_>>>(),
-        _ => Ok(vec![]),
-    }
+    let constraints = type_.meta().constraints.clone();
+    constraints
+        .iter()
+        .map(|constraint| {
+            let result = evaluate_predicate(baml_value, &constraint.expression)?;
+            Ok((constraint.clone(), result))
+        })
+        .collect::<Result<Vec<_>>>()
 }

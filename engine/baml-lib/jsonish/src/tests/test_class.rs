@@ -16,7 +16,7 @@ test_deserializer!(
     test_foo,
     FOO_FILE,
     r#"{"hi": ["a", "b"]}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     {"hi": ["a", "b"]}
 );
 
@@ -24,7 +24,7 @@ test_deserializer!(
     test_wrapped_objects,
     FOO_FILE,
     r#"{"hi": "a"}"#,
-    FieldType::List(FieldType::Class("Foo".to_string()).into()),
+    FieldType::List(FieldType::Class("Foo".to_string(), TypeMetadata::default()).into(), TypeMetadata::default()),
     [{"hi": ["a"]}]
 );
 
@@ -32,7 +32,7 @@ test_deserializer!(
     test_string_from_obj_and_string,
     FOO_FILE,
     r#"The output is: {"hi": ["a", "b"]}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     {"hi": ["a", "b"]}
 );
 
@@ -40,7 +40,7 @@ test_deserializer!(
     test_string_from_obj_and_string_with_extra_text,
     FOO_FILE,
     r#"This is a test. The output is: {"hi": ["a", "b"]}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     {"hi": ["a", "b"]}
 );
 
@@ -48,7 +48,7 @@ test_deserializer!(
     test_string_from_obj_and_string_with_invalid_extra_text,
     FOO_FILE,
     r#"{"hi": ["a", "b"]} is the output."#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     {"hi": ["a", "b"]}
 );
 
@@ -56,7 +56,7 @@ test_deserializer!(
   str_with_quotes,
   FOO_FILE,
   r#"{"foo": "[\"bar\"]"}"#,
-  FieldType::Class("Bar".to_string()),
+  FieldType::Class("Bar".to_string(), TypeMetadata::default()),
   {"foo": "[\"bar\"]"}
 );
 
@@ -64,7 +64,7 @@ test_deserializer!(
   str_with_nested_json,
   FOO_FILE,
   r#"{"foo": "{\"foo\": [\"bar\"]}"}"#,
-  FieldType::Class("Bar".to_string()),
+  FieldType::Class("Bar".to_string(), TypeMetadata::default()),
   {"foo": "{\"foo\": [\"bar\"]}"}
 );
 
@@ -76,7 +76,7 @@ test_deserializer!(
   "foo": "Here is how you can build the API call:\n```json\n{\n  \"foo\": {\n    \"world\": [\n      \"bar\"\n    ]\n  }\n}\n```"
 }
 "#,
-    FieldType::Class("Bar".to_string()),
+    FieldType::Class("Bar".to_string(), TypeMetadata::default()),
     {"foo": "Here is how you can build the API call:\n```json\n{\n  \"foo\": {\n    \"world\": [\n      \"bar\"\n    ]\n  }\n}\n```"}
 );
 
@@ -90,7 +90,7 @@ test_deserializer!(
     test_optional_foo,
     OPTIONAL_FOO,
     r#"{}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "foo": null }
 );
 
@@ -98,7 +98,7 @@ test_deserializer!(
     test_optional_foo_with_value,
     OPTIONAL_FOO,
     r#"{"foo": ""}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "foo": "" }
 );
 
@@ -113,7 +113,7 @@ test_deserializer!(
     test_multi_fielded_foo,
     MULTI_FIELDED_FOO,
     r#"{"one": "a"}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "one": "a", "two": null }
 );
 
@@ -121,7 +121,7 @@ test_deserializer!(
     test_multi_fielded_foo_with_optional,
     MULTI_FIELDED_FOO,
     r#"{"one": "a", "two": "b"}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "one": "a", "two": "b" }
 );
 
@@ -145,7 +145,7 @@ test_deserializer!(
             ]    
         }
     ```"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "one": "hi", "two": "hello" }
 );
 
@@ -161,7 +161,7 @@ test_deserializer!(
     test_multi_fielded_foo_with_list,
     MULTI_FIELDED_FOO_WITH_LIST,
     r#"{"a": 1, "b": "hi", "c": ["a", "b"]}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "a": 1, "b": "hi", "c": ["a", "b"] }
 );
 
@@ -179,7 +179,7 @@ test_deserializer!(
     test_nested_class,
     NEST_CLASS,
     r#"{"foo": {"a": "hi"}}"#,
-    FieldType::Class("Bar".to_string()),
+    FieldType::Class("Bar".to_string(), TypeMetadata::default()),
     { "foo": { "a": "hi" } }
 );
 
@@ -202,7 +202,7 @@ test_deserializer!(
             "a": "twooo"
         }
     }"#,
-    FieldType::Class("Bar".to_string()),
+    FieldType::Class("Bar".to_string(), TypeMetadata::default()),
     { "foo": { "a": "hi" } }
 );
 
@@ -223,7 +223,7 @@ test_deserializer!(
         }
     }
     "#,
-    FieldType::Class("Bar".to_string()),
+    FieldType::Class("Bar".to_string(), TypeMetadata::default()),
     { "foo": { "a": "hi" } }
 );
 
@@ -255,7 +255,7 @@ test_deserializer!(
         "education": [],
         "skills": ["politician", "former brigadier-general"]
     }"#,
-    FieldType::Class("Resume".to_string()),
+    FieldType::Class("Resume".to_string(), TypeMetadata::default()),
     {
         "name": "Lee Hsien Loong",
         "email": null,
@@ -282,7 +282,7 @@ test_partial_deserializer!(
         "experience": [
             "Senior Minister of Singapore since 2024",
             "Prime Minister of Singapore from 2004 to "#,
-    FieldType::Class("Resume".to_string()),
+    FieldType::Class("Resume".to_string(), TypeMetadata::default()),
     {
         "name": "Lee Hsien Loong",
         "email": null,
@@ -303,7 +303,7 @@ test_partial_deserializer!(
         "experience": [
             "Senior Minister of Singapore since 2024",
             "Prime Minister of Singapore from 2004 to "#,
-    FieldType::Class("Resume".to_string()),
+    FieldType::Class("Resume".to_string(), TypeMetadata::default()),
     {
         "name": null,
         "email": null,
@@ -337,7 +337,7 @@ test_deserializer!(
         "key4": "This is a value for key4",
         "key.with.punctuation/123": "This is a value with punctuation and numbers"
       }"#,
-    FieldType::Class("TestClassAlias".to_string()),
+    FieldType::Class("TestClassAlias".to_string(), TypeMetadata::default()),
     {
         "key": "This is a value with a dash",
         "key2": "This is a value for key21",
@@ -383,7 +383,7 @@ test_deserializer!(
           "SIMD on custom silicon"
         ]
       }"#,
-    FieldType::Class("Resume".to_string()),
+    FieldType::Class("Resume".to_string(), TypeMetadata::default()),
     {
         "name": "Vaibhav Gupta",
         "education": [
@@ -542,7 +542,7 @@ test_failing_deserializer!(
     }
     "#,
     r#"My inner string"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::Class("Foo".to_string(), TypeMetadata::default())
 );
 
 test_failing_deserializer!(
@@ -557,7 +557,7 @@ test_failing_deserializer!(
     }
     "#,
     r#"My inner string"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::Class("Foo".to_string(), TypeMetadata::default())
 );
 
 test_failing_deserializer!(
@@ -568,7 +568,7 @@ test_failing_deserializer!(
     }
     "#,
     r#"My inner string"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::Class("Foo".to_string(), TypeMetadata::default())
 );
 
 test_deserializer!(
@@ -579,7 +579,7 @@ test_deserializer!(
     }
     "#,
     r#"1214"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "foo": 1214 }
 );
 
@@ -591,7 +591,7 @@ test_deserializer!(
     }
     "#,
     r#"1214.123"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "foo": 1214.123 }
 );
 
@@ -603,7 +603,7 @@ test_deserializer!(
     }
     "#,
     r#" true "#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     { "foo": true }
 );
 
@@ -675,7 +675,7 @@ test_deserializer!(
 }
 ```
 "#,
-FieldType::Class("Schema".to_string()),
+FieldType::Class("Schema".to_string(), TypeMetadata::default()),
 {
     "prop1": "one",
     "prop2": {
@@ -946,7 +946,7 @@ r#"{
     }
   ]
 }"#,
-FieldType::Class("Page".into()),
+FieldType::Class("Page".into(), TypeMetadata::default()),
 {
     "object": "page",
     "icon": {
@@ -1056,7 +1056,7 @@ Here's the redesigned code with these changes:
   ]
 
   "#,
-  FieldType::Class("DoCommandACReturnType".to_string()),
+  FieldType::Class("DoCommandACReturnType".to_string(), TypeMetadata::default()),
   {
     "sections": [
       {
@@ -1087,7 +1087,7 @@ test_partial_deserializer!(
   test_object_streaming_ints,
   OBJECT_STREAM_TEST,
   r#"{"a": 11, "b": 22"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {"a": 11, "b": null, "c": null}
 );
 
@@ -1095,7 +1095,7 @@ test_partial_deserializer!(
   test_object_streaming_ints_newlines,
   OBJECT_STREAM_TEST,
   "{\n\"a\":11,\n\"b\": 22",
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {"a": 11, "b": null, "c": null}
 );
 
@@ -1103,7 +1103,7 @@ test_partial_deserializer!(
   test_object_finished_ints,
   OBJECT_STREAM_TEST,
   r#"{"a": 1234,"b": 1234, "c": 1234}"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {"a": 1234, "b": 1234, "c": 1234}
 );
 
@@ -1111,7 +1111,7 @@ test_partial_deserializer!(
   test_nested_object_streaming,
   OBJECT_STREAM_TEST,
   r#"{"a": 1234, "foo": { "c": 33, "a": 11"#,
-  FieldType::Class("Bar".to_string()),
+  FieldType::Class("Bar".to_string(), TypeMetadata::default()),
   {"a": 1234, "foo": { "a": null, "b": null, "c": 33}}
 );
 
@@ -1132,7 +1132,7 @@ test_partial_deserializer!(
   test_big_object_empty,
   BIG_OBJECT_STREAM_TEST,
   "{",
-  FieldType::Class("CompoundBigNumbers".to_string()),
+  FieldType::Class("CompoundBigNumbers".to_string(), TypeMetadata::default()),
   {"big": null, "big_nums": [], "another": null}
 );
 
@@ -1140,7 +1140,7 @@ test_partial_deserializer!(
   test_big_object_start_big,
   BIG_OBJECT_STREAM_TEST,
   r#"{"big": {"a": 11, "b": 12"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
+  FieldType::Class("CompoundBigNumbers".to_string(), TypeMetadata::default()),
   {"big": {"a": 11, "b": null}, "big_nums": [], "another": null}
 );
 
@@ -1148,7 +1148,7 @@ test_partial_deserializer!(
   test_big_object_start_big_into_list,
   BIG_OBJECT_STREAM_TEST,
   r#"json```{"big": {"a": 11, "b": 12}, "big_nums": [{"a": 22, "b": 33"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
+  FieldType::Class("CompoundBigNumbers".to_string(), TypeMetadata::default()),
   {"big": {"a": 11, "b": 12.0}, "big_nums": [{"a": 22, "b": null}], "another": null}
 );
 
@@ -1156,7 +1156,7 @@ test_partial_deserializer!(
   test_big_object_start_big_into_list2,
   BIG_OBJECT_STREAM_TEST,
   r#"json```{"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": 0.1"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
+  FieldType::Class("CompoundBigNumbers".to_string(), TypeMetadata::default()),
   {"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33.0}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": null}}
 );
 
@@ -1168,7 +1168,7 @@ test_deserializer!(
   }
   "#,
   r#"{"a": ""}"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {"a": ""}
 );
 
@@ -1180,7 +1180,7 @@ test_deserializer!(
   }
   "#,
   r#"{a: ""}"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {"a": ""}
 );
 
@@ -1198,7 +1198,7 @@ test_deserializer!(
     b: "",
     res: []
   }"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {"a": "", "b": "", "res": []}
 );
 
@@ -1218,7 +1218,7 @@ test_deserializer!(
     res: [hello,
      world]
   }"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "a": "Hi friends!",
     "b": "hey world lets do something kinda cool\n    so that we can test this out",
@@ -1241,7 +1241,7 @@ test_deserializer!(
   
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "pointer": {
       "pointer": null,
@@ -1262,7 +1262,7 @@ test_deserializer!(
   
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "pointer": {
       "pointer": null,
@@ -1285,7 +1285,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "pointer": {
       "pointer": 1,
@@ -1315,7 +1315,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "b": {
       "f": {
@@ -1339,7 +1339,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "pointer": {
       "pointer": 1,
@@ -1366,7 +1366,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "rec_one": {
       "rec_one": 1,
@@ -1405,7 +1405,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "rec_one": {
       "rec_one": 1,
@@ -1438,7 +1438,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "rec_one": true,
     "rec_two": false
@@ -1465,7 +1465,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::Class("Foo".to_string(), TypeMetadata::default()),
   {
     "rec_one": {
       "rec_one": {

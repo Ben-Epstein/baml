@@ -397,32 +397,23 @@ impl IRHelper for IntermediateRepr {
         &'a self,
         field_type: &'a FieldType,
     ) -> (&'a FieldType, Vec<Constraint>) {
-        match field_type {
-            FieldType::Class(class_name, meta) => match self.find_class(class_name) {
-                Err(_) => (field_type, Vec::new()),
-                Ok(class_node) => (field_type, class_node.item.attributes.type_metadata.constraints.clone()),
-            },
-            FieldType::Enum(enum_name, meta) => match self.find_enum(enum_name) {
-                Err(_) => (field_type, Vec::new()),
-                Ok(enum_node) => (field_type, enum_node.item.attributes.type_metadata.constraints.clone()),
-            },
-            _ => (field_type, Vec::new()),
-        }
+        let constraints = field_type.meta().constraints.clone();
+        (field_type, constraints)
     }
 
     fn type_has_constraints(&self, field_type: &FieldType) -> bool {
-        let (_, constraints) = self.distribute_constraints(field_type);
-        !constraints.is_empty()
+        !field_type.meta().constraints.is_empty()
     }
 
     fn type_has_checks(&self, field_type: &FieldType) -> bool {
-        let (_, constraints) = self.distribute_constraints(field_type);
-        constraints
+        field_type.meta()
+            .constraints
             .iter()
             .any(|Constraint { level, .. }| *level == ConstraintLevel::Check)
     }
 }
 
+/// Create a plain unit type.
 fn unit_type() -> FieldType { FieldType::Tuple(vec![], TypeMetadata::default()) }
 
 /// Derive the simplest type that can categorize a given value. This is meant to be used

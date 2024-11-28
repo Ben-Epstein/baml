@@ -22,7 +22,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_types::{BamlValue, EvaluationContext};
+use baml_types::{BamlValue, EvaluationContext, TypeMetadata};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
     ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType, IRHelper, TypeValue},
@@ -135,7 +135,7 @@ fn relevant_data_models<'a>(
     while !start.is_empty() {
         let output = start.pop().unwrap();
         match ir.distribute_constraints(&output) {
-            (FieldType::Enum(enm), constraints) => {
+            (FieldType::Enum(enm, _), constraints) => {
                 if checked_types.insert(output.to_string()) {
                     let walker = ir.find_enum(&enm);
 
@@ -161,12 +161,12 @@ fn relevant_data_models<'a>(
                     });
                 }
             }
-            (FieldType::List(inner), _constraints) | (FieldType::Optional(inner), _constraints) => {
+            (FieldType::List(inner, _), _constraints) | (FieldType::Optional(inner, _), _constraints) => {
                 if !checked_types.contains(&inner.to_string()) {
                     start.push(inner.as_ref().clone());
                 }
             }
-            (FieldType::Map(k, v), _constraints) => {
+            (FieldType::Map(k, v, _), _constraints) => {
                 if checked_types.insert(output.to_string()) {
                     if !checked_types.contains(&k.to_string()) {
                         start.push(k.as_ref().clone());
@@ -176,8 +176,8 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Tuple(options), _constraints)
-            | (FieldType::Union(options), _constraints) => {
+            (FieldType::Tuple(options, _), _constraints)
+            | (FieldType::Union(options, _), _constraints) => {
                 if checked_types.insert((&output).to_string()) {
                     for inner in options {
                         if !checked_types.contains(&inner.to_string()) {
@@ -186,7 +186,7 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Class(cls), constraints) => {
+            (FieldType::Class(cls, _), constraints) => {
                 if checked_types.insert(output.to_string()) {
                     let walker = ir.find_class(&cls);
 
@@ -227,15 +227,11 @@ fn relevant_data_models<'a>(
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), walker?.alias(env_values)?),
                         fields,
-                        constraints,
                     });
                 }
             }
-            (FieldType::Literal(_), _) => {}
-            (FieldType::Primitive(_), _constraints) => {}
-            (FieldType::Constrained { .. }, _) => {
-                unreachable!("It is guaranteed that a call to distribute_constraints will not return FieldType::Constrained")
-            }
+            (FieldType::Literal(_, _), _) => {}
+            (FieldType::Primitive(_, _), _constraints) => {}
         }
     }
 
@@ -249,7 +245,7 @@ test_deserializer!(
     test_string_from_string,
     EMPTY_FILE,
     r#"hello"#,
-    FieldType::Primitive(TypeValue::String),
+    FieldType::Primitive(TypeValue::String, TypeMetadata::default()),
     "hello"
 );
 
@@ -257,7 +253,7 @@ test_deserializer!(
     test_string_from_string_with_quotes,
     EMPTY_FILE,
     r#""hello""#,
-    FieldType::Primitive(TypeValue::String),
+    FieldType::Primitive(TypeValue::String, TypeMetadata::default()),
     "\"hello\""
 );
 
@@ -265,7 +261,7 @@ test_deserializer!(
     test_string_from_object,
     EMPTY_FILE,
     r#"{"hi":    "hello"}"#,
-    FieldType::Primitive(TypeValue::String),
+    FieldType::Primitive(TypeValue::String, TypeMetadata::default()),
     r#"{"hi":    "hello"}"#
 );
 
@@ -273,7 +269,7 @@ test_deserializer!(
     test_string_from_obj_and_string,
     EMPTY_FILE,
     r#"The output is: {"hello": "world"}"#,
-    FieldType::Primitive(TypeValue::String),
+    FieldType::Primitive(TypeValue::String, TypeMetadata::default()),
     "The output is: {\"hello\": \"world\"}"
 );
 
@@ -281,7 +277,7 @@ test_deserializer!(
     test_string_from_list,
     EMPTY_FILE,
     r#"["hello", "world"]"#,
-    FieldType::Primitive(TypeValue::String),
+    FieldType::Primitive(TypeValue::String, TypeMetadata::default()),
     "[\"hello\", \"world\"]"
 );
 
@@ -289,7 +285,7 @@ test_deserializer!(
     test_string_from_int,
     EMPTY_FILE,
     r#"1"#,
-    FieldType::Primitive(TypeValue::String),
+    FieldType::Primitive(TypeValue::String, TypeMetadata::default()),
     "1"
 );
 
@@ -311,7 +307,7 @@ test_deserializer!(
         "blah": "blah"
       }
     ]"#,
-    FieldType::Primitive(TypeValue::String),
+    FieldType::Primitive(TypeValue::String, TypeMetadata::default()),
     r#"Some preview text
 
     JSON Output:
@@ -349,7 +345,7 @@ test_deserializer!(
     ]
     ```
     "#,
-    FieldType::Primitive(TypeValue::String),
+    FieldType::Primitive(TypeValue::String, TypeMetadata::default()),
     r#"Hello there.
     
     JSON Output:
@@ -388,7 +384,7 @@ test_deserializer!(
     }
 
   "#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     json!({"id": null })
 );
 
@@ -406,7 +402,7 @@ test_deserializer!(
       }
 
     "#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::Class("Foo".to_string(), TypeMetadata::default()),
     json!({"id": r#"{{hi} there"# })
 );
 
@@ -531,7 +527,7 @@ test_deserializer!(
         ]
       }
     "#,
-    FieldType::Class("BookAnalysis".to_string()),
+    FieldType::Class("BookAnalysis".to_string(), TypeMetadata::default()),
     json!({
       "bookNames": ["brave new world", "the lord of the rings", "three body problem", "stormlight archive"],
       "popularityOverTime": [
@@ -644,7 +640,7 @@ test_deserializer!(
       ]
     }
   "#,
-    FieldType::Class("BookAnalysis".to_string()),
+    FieldType::Class("BookAnalysis".to_string(), TypeMetadata::default()),
     json!({
       "bookNames": ["brave new world", "the lord of the rings"],
       "popularityOverTime": [
@@ -699,7 +695,7 @@ test_deserializer!(
     "four": "four"
   }
   "#,
-    FieldType::Class("OrderedClass".to_string()),
+    FieldType::Class("OrderedClass".to_string(), TypeMetadata::default()),
     json!({
       "one": "one",
       "two": "two",
@@ -719,7 +715,7 @@ test_deserializer!(
     "four": "four"
   }
     "#,
-    FieldType::Class("OrderedClass".to_string()),
+    FieldType::Class("OrderedClass".to_string(), TypeMetadata::default()),
     json!({
       "one": "one",
       "two": "two",
@@ -733,7 +729,7 @@ test_deserializer!(
 /// where it could possibly be extended further, it must be returned
 /// as Null.
 fn singleton_list_int_deleted() {
-    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int, TypeMetadata::default())), TypeMetadata::default());
     let output_format = OutputFormatContent::target(target.clone()).build();
     let res = from_str(&output_format, &target, "[123", true).expect("Can parse");
     let baml_value: BamlValue = res.into();
@@ -745,7 +741,7 @@ fn singleton_list_int_deleted() {
 /// where it could possibly be extended further, it must be returned
 /// as Null.
 fn list_int_deleted() {
-    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int, TypeMetadata::default())), TypeMetadata::default());
     let output_format = OutputFormatContent::target(target.clone()).build();
     let res = from_str(&output_format, &target, "[123, 456", true).expect("Can parse");
     let baml_value: BamlValue = res.into();
@@ -757,7 +753,7 @@ fn list_int_deleted() {
 /// where it could possibly be extended further, it must be returned
 /// as Null.
 fn list_int_not_deleted() {
-    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int, TypeMetadata::default())), TypeMetadata::default());
     let output_format = OutputFormatContent::target(target.clone()).build();
     let res = from_str(&output_format, &target, "[123, 456 // Done", true).expect("Can parse");
     let baml_value: BamlValue = res.into();
@@ -772,7 +768,7 @@ fn list_int_not_deleted() {
 /// where it could possibly be extended further, it must be returned
 /// as Null.
 fn partial_int_deleted() {
-    let target = FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let target = FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::Int, TypeMetadata::default())), TypeMetadata::default());
     let output_format = OutputFormatContent::target(target.clone()).build();
     let res = from_str(&output_format, &target, "123", true).expect("Can parse");
     let baml_value: BamlValue = res.into();
@@ -785,7 +781,7 @@ fn partial_int_deleted() {
 /// where it could possibly be extended further, it must be returned
 /// as Null.
 fn partial_int_not_deleted() {
-    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int)));
+    let target = FieldType::List(Box::new(FieldType::Primitive(TypeValue::Int, TypeMetadata::default())), TypeMetadata::default());
     let output_format = OutputFormatContent::target(target.clone()).build();
     let res = from_str(&output_format, &target, "123", true).expect("Can parse");
     let baml_value: BamlValue = res.into();
