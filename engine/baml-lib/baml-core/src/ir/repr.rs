@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
 use anyhow::{anyhow, Result};
-use baml_types::{Constraint, ConstraintLevel, FieldType, Resolvable, StringOr, UnresolvedValue};
+use baml_types::{
+    Constraint, ConstraintLevel, FieldType, Resolvable, StreamingBehavior, StringOr,
+    UnresolvedValue,
+};
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_parser_database::{
@@ -435,8 +438,8 @@ impl WithRepr<FieldType> for ast::FieldType {
 
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         let attributes = WithRepr::attributes(self, db);
-        // let constraints = WithRepr::attributes(self, db).constraints;
         let has_constraints = !attributes.constraints.is_empty();
+        let streaming_behavior = streaming_behavior_from_attributes(&attributes);
         let base = match self {
             ast::FieldType::Primitive(arity, typeval, ..) => {
                 let repr = FieldType::Primitive(*typeval);
@@ -461,9 +464,10 @@ impl WithRepr<FieldType> for ast::FieldType {
                         let maybe_constraints = class_walker.get_constraints(SubType::Class);
                         match maybe_constraints {
                             Some(constraints) if !constraints.is_empty() => {
-                                FieldType::Constrained {
+                                FieldType::WithMetadata {
                                     base: Box::new(base_class),
                                     constraints,
+                                    streaming_behavior: streaming_behavior.clone(),
                                 }
                             }
                             _ => base_class,
@@ -474,9 +478,10 @@ impl WithRepr<FieldType> for ast::FieldType {
                         let maybe_constraints = enum_walker.get_constraints(SubType::Enum);
                         match maybe_constraints {
                             Some(constraints) if !constraints.is_empty() => {
-                                FieldType::Constrained {
+                                FieldType::WithMetadata {
                                     base: Box::new(base_type),
                                     constraints,
+                                    streaming_behavior: streaming_behavior.clone(),
                                 }
                             }
                             _ => base_type,
@@ -528,9 +533,10 @@ impl WithRepr<FieldType> for ast::FieldType {
         };
 
         let with_constraints = if has_constraints {
-            FieldType::Constrained {
+            FieldType::WithMetadata {
                 base: Box::new(base.clone()),
                 constraints: attributes.constraints,
+                streaming_behavior,
             }
         } else {
             base
@@ -1163,6 +1169,20 @@ pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
         validated_schema.configuration,
     )?;
     Ok(ir)
+}
+
+/// Pull out `StreamingBehavior` from `NodeAttributes`.
+fn streaming_behavior_from_attributes(attributes: &NodeAttributes) -> StreamingBehavior {
+    fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
+        match maybe_value {
+            Some(Resolvable::Bool(true, _)) => true,
+            _ => false,
+        }
+    }
+    StreamingBehavior {
+        done: is_some_true(attributes.get("streaming::done")),
+        state: is_some_true(attributes.get("streaming::state")),
+    }
 }
 
 #[cfg(test)]

@@ -342,7 +342,7 @@ impl OutputFormatContent {
                 FieldType::Optional(_) => Some(String::from("Answer in JSON using this schema:\n")),
                 FieldType::Map(_, _) => Some(String::from("Answer in JSON using this schema:\n")),
                 FieldType::Tuple(_) => None,
-                FieldType::Constrained { base, .. } => {
+                FieldType::WithMetadata { base, .. } => {
                     auto_prefix(base, options, output_format_content)
                 }
             }
@@ -423,7 +423,7 @@ impl OutputFormatContent {
                 }
             },
             FieldType::Literal(v) => v.to_string(),
-            FieldType::Constrained { base, .. } => {
+            FieldType::WithMetadata { base, .. } => {
                 self.inner_type_render(options, base, render_state, group_hoisted_literals)?
             }
             FieldType::Enum(e) => {

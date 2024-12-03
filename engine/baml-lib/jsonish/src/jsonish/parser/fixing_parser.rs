@@ -1,7 +1,7 @@
 mod json_collection;
 mod json_parse_state;
 
-use crate::jsonish::{value::Fixes, Value};
+use crate::jsonish::{value::{CompletionState, Fixes}, Value};
 
 use self::json_parse_state::JsonParseState;
 
@@ -66,8 +66,12 @@ pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes
                         state
                             .completed_values
                             .into_iter()
-                            .map(|f| Value::FixedJson(f.1.into(), f.2))
+                            .map(|f| {
+                                let completion_state = f.1.completion_state().clone();
+                                Value::FixedJson(f.1.into(), f.2, completion_state)
+                            })
                             .collect(),
+                        todo!("Is this array complete?")
                     ),
                     vec![Fixes::InferredArray],
                 )])
@@ -105,12 +109,14 @@ mod tests {
         dbg!(&vals);
 
         match vals[0].0.clone() {
-            Value::Array(xs) => {
+            Value::Array(xs, array_cmplt) => {
                 assert_eq!(xs.len(), 1);
+                assert_eq!(array_cmplt, CompletionState::Incomplete);
                 match &xs[0] {
-                    Value::Number(n) => {
+                    Value::Number(n, n_cmplt) => {
                         dbg!(&n);
                         assert_eq!(n, &serde_json::Number::from(12));
+                        assert_eq!(n_cmplt, &CompletionState::Incomplete);
                     }
                     _ => panic!("Expected number"),
                 }
@@ -125,14 +131,17 @@ mod tests {
         let vals = parse(r#"{"a": 11, "b": 22"#, &opts).unwrap();
         dbg!(&vals);
         match &vals[0].0 {
-            Value::Object(fields) => {
+            Value::Object(fields, obj_cmplt) => {
                 assert_eq!(fields.len(), 2);
+                assert_eq!(obj_cmplt, &CompletionState::Incomplete);
                 match (&fields[0], &fields[1]) {
-                    ((key_a, Value::Number(a)), (key_b, Value::Number(b))) => {
+                    ((key_a, Value::Number(a, a_cmplt)), (key_b, Value::Number(b, b_cmplt))) => {
                         assert_eq!(key_a.as_str(), "a");
                         assert_eq!(key_b.as_str(), "b");
                         assert_eq!(a, &serde_json::Number::from(11));
                         assert_eq!(b, &serde_json::Number::from(22));
+                        assert_eq!(a_cmplt, &CompletionState::Complete);
+                        assert_eq!(b_cmplt, &CompletionState::Incomplete);
                     }
                     _ => panic!("Expected two numbers."),
                 }
@@ -147,14 +156,17 @@ mod tests {
         let vals = parse("{\n \"a\": 11, \n \"b\": 22", &opts).unwrap();
         dbg!(&vals);
         match &vals[0].0 {
-            Value::Object(fields) => {
+            Value::Object(fields, obj_cmplt) => {
                 assert_eq!(fields.len(), 2);
+                assert_eq!(obj_cmplt, &CompletionState::Incomplete);
                 match (&fields[0], &fields[1]) {
-                    ((key_a, Value::Number(a)), (key_b, Value::Number(b))) => {
+                    ((key_a, Value::Number(a, a_cmplt)), (key_b, Value::Number(b, b_cmplt))) => {
                         assert_eq!(key_a.as_str(), "a");
                         assert_eq!(key_b.as_str(), "b");
                         assert_eq!(a, &serde_json::Number::from(11));
                         assert_eq!(b, &serde_json::Number::from(22));
+                        assert_eq!(a_cmplt, &CompletionState::Complete);
+                        assert_eq!(b_cmplt, &CompletionState::Incomplete);
                     }
                     _ => panic!("Expected two numbers."),
                 }

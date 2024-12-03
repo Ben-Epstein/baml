@@ -384,11 +384,11 @@ impl IRHelper for IntermediateRepr {
     }
 
     /// Constraints may live in several places. A constrained base type stors its
-    /// constraints by wrapping itself in the `FieldType::Constrained` constructor.
+    /// constraints by wrapping itself in the `FieldType::WithMetadata` constructor.
     /// Additionally, `FieldType::Class` may have constraints stored in its class node,
     /// and `FieldType::Enum` can store constraints in its `Enum` node.
-    /// And the `FieldType::Constrained` constructor might wrap another
-    /// `FieldType::Constrained` constructor.
+    /// And the `FieldType::WithMetadata` constructor might wrap another
+    /// `FieldType::WithMetadata` constructor.
     ///
     /// This function collects constraints for a given type from all these
     /// possible sources. Whenever querying a type for its constraints, you
@@ -408,13 +408,13 @@ impl IRHelper for IntermediateRepr {
                 Ok(enum_node) => (field_type, enum_node.item.attributes.constraints.clone()),
             },
             // Check the first level to see if it's constrained.
-            FieldType::Constrained { base, constraints } => {
+            FieldType::WithMetadata { base, constraints, .. } => {
                 match base.as_ref() {
                     // If so, we must check the second level to see if we need to combine
                     // constraints across levels.
-                    // The recursion here means that arbitrarily nested `FieldType::Constrained`s
+                    // The recursion here means that arbitrarily nested `FieldType::WithMetadata`s
                     // will be collapsed before the function returns.
-                    FieldType::Constrained { .. } => {
+                    FieldType::WithMetadata { .. } => {
                         let (sub_base, sub_constraints) =
                             self.distribute_constraints(base.as_ref());
                         let combined_constraints = vec![constraints.clone(), sub_constraints]
@@ -774,11 +774,11 @@ mod tests {
             }
         }
 
-        let input = FieldType::Constrained {
+        let input = FieldType::WithMetadata {
             constraints: vec![mk_constraint("a")],
-            base: Box::new(FieldType::Constrained {
+            base: Box::new(FieldType::WithMetadata {
                 constraints: vec![mk_constraint("b")],
-                base: Box::new(FieldType::Constrained {
+                base: Box::new(FieldType::WithMetadata {
                     constraints: vec![mk_constraint("c")],
                     base: Box::new(FieldType::Primitive(TypeValue::Int)),
                 }),

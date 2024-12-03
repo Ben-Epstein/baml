@@ -85,9 +85,10 @@ pub enum FieldType {
     Union(Vec<FieldType>),
     Tuple(Vec<FieldType>),
     Optional(Box<FieldType>),
-    Constrained {
+    WithMetadata {
         base: Box<FieldType>,
         constraints: Vec<Constraint>,
+        streaming_behavior: StreamingBehavior,
     },
 }
 
@@ -125,7 +126,7 @@ impl std::fmt::Display for FieldType {
             FieldType::Map(k, v) => write!(f, "map<{k}, {v}>"),
             FieldType::List(t) => write!(f, "{t}[]"),
             FieldType::Optional(t) => write!(f, "{t}?"),
-            FieldType::Constrained { base, .. } => base.fmt(f),
+            FieldType::WithMetadata { base, .. } => base.fmt(f),
         }
     }
 }
@@ -136,7 +137,7 @@ impl FieldType {
             FieldType::Primitive(_) => true,
             FieldType::Optional(t) => t.is_primitive(),
             FieldType::List(t) => t.is_primitive(),
-            FieldType::Constrained { base, .. } => base.is_primitive(),
+            FieldType::WithMetadata { base, .. } => base.is_primitive(),
             _ => false,
         }
     }
@@ -146,7 +147,7 @@ impl FieldType {
             FieldType::Optional(_) => true,
             FieldType::Primitive(TypeValue::Null) => true,
             FieldType::Union(types) => types.iter().any(FieldType::is_optional),
-            FieldType::Constrained { base, .. } => base.is_optional(),
+            FieldType::WithMetadata { base, .. } => base.is_optional(),
             _ => false,
         }
     }
@@ -155,7 +156,7 @@ impl FieldType {
         match self {
             FieldType::Primitive(TypeValue::Null) => true,
             FieldType::Optional(t) => t.is_null(),
-            FieldType::Constrained { base, .. } => base.is_null(),
+            FieldType::WithMetadata { base, .. } => base.is_null(),
             _ => false,
         }
     }
@@ -197,17 +198,19 @@ impl FieldType {
                 (FieldType::Map(_, _), _) => false,
 
                 (
-                    FieldType::Constrained {
+                    FieldType::WithMetadata {
                         base: self_base,
                         constraints: self_cs,
+                        ..
                     },
-                    FieldType::Constrained {
+                    FieldType::WithMetadata {
                         base: other_base,
                         constraints: other_cs,
+                        ..
                     },
                 ) => self_base.is_subtype_of(other_base) && self_cs == other_cs,
-                (FieldType::Constrained { base, .. }, _) => base.is_subtype_of(other),
-                (_, FieldType::Constrained { base, .. }) => self.is_subtype_of(base),
+                (FieldType::WithMetadata { base, .. }, _) => base.is_subtype_of(other),
+                (_, FieldType::WithMetadata { base, .. }) => self.is_subtype_of(base),
                 (
                     FieldType::Literal(LiteralValue::Bool(_)),
                     FieldType::Primitive(TypeValue::Bool),
@@ -248,6 +251,26 @@ impl FieldType {
                 (FieldType::Class(_), _) => false,
             }
         }
+    }
+}
+
+/// Metadata on a type that determines how it behaves under streaming conditions.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct StreamingBehavior {
+    /// A type with the `done` property will not be visible in a stream until
+    /// we are certain that it is completely available (i.e. the parser did
+    /// not finalize it through any early termination, enough tokens were available
+    /// from the LLM response to be certain that it is done).
+    pub done: bool,
+
+    /// A type with the `state` property will be represented in client code as
+    /// a struct: `{value: T, streaming_state: "incomplete" | "complete"}`.
+    pub state: bool,
+}
+
+impl Default for StreamingBehavior {
+    fn default() -> Self {
+        StreamingBehavior { done: false, state: false }
     }
 }
 

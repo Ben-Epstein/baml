@@ -6,7 +6,7 @@ use crate::jsonish::{
         markdown_parser::{self, MarkdownResult},
         multi_json_parser,
     },
-    value::Fixes,
+    value::{CompletionState, Fixes},
     Value,
 };
 
@@ -38,7 +38,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                     match res {
                         Some(MarkdownResult::CodeBlock(s, v)) => {
                             return Ok(Value::AnyOf(
-                                vec![Value::Markdown(s.to_string(), Box::new(v))],
+                                vec![Value::Markdown(s.to_string(), Box::new(v), CompletionState::Incomplete)],
                                 str.to_string(),
                             ));
                         }
@@ -59,7 +59,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                     let others = items
                         .iter()
                         .filter_map(|res| match res {
-                            MarkdownResult::String(s) => Some(Value::String(s.to_string())),
+                            MarkdownResult::String(s) => Some(Value::String(s.to_string(), CompletionState::Incomplete)),
                             _ => None,
                         })
                         .map(|v| {
@@ -85,9 +85,9 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             MarkdownResult::CodeBlock(s, v) => Some((s, v)),
                             _ => None,
                         })
-                        .map(|(s, v)| Value::Markdown(s.to_string(), Box::new(v)))
+                        .map(|(s, v)| Value::Markdown(s.to_string(), Box::new(v), CompletionState::Incomplete))
                         .collect::<Vec<_>>();
-                    let array = Value::Array(items.clone());
+                    let array = Value::Array(items.clone(), CompletionState::Incomplete);
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(array))
@@ -115,16 +115,17 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                                 .ok_or_else(|| anyhow::anyhow!("Expected 1 item"))?
                                 .into(),
                             vec![Fixes::GreppedForJSON],
+                            CompletionState::Incomplete
                         )],
                         str.to_string(),
                     ))
                 }
                 _ => {
-                    let items_clone = Value::Array(items.clone());
+                    let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(items_clone))
-                        .map(|v| Value::FixedJson(v.into(), vec![Fixes::GreppedForJSON]))
+                        .map(|v| Value::FixedJson(v.into(), vec![Fixes::GreppedForJSON], CompletionState::Incomplete))
                         .collect::<Vec<_>>();
                     return Ok(Value::AnyOf(items, str.to_string()));
                 }
@@ -145,7 +146,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             anyhow::anyhow!("Expected 1 item when performing fixes")
                         })?;
                         return Ok(Value::AnyOf(
-                            vec![Value::FixedJson(v.into(), fixes)],
+                            vec![Value::FixedJson(v.into(), fixes, CompletionState::Incomplete)],
                             str.to_string(),
                         ));
                     }
@@ -160,10 +161,10 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 
                         let items = items
                             .into_iter()
-                            .map(|(v, fixes)| Value::FixedJson(v.into(), fixes))
+                            .map(|(v, fixes)| Value::FixedJson(v.into(), fixes, CompletionState::Incomplete))
                             .collect::<Vec<_>>();
 
-                        let items_clone = Value::Array(items.clone());
+                        let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
 
                         let items = items
                             .into_iter()
@@ -180,7 +181,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
     }
 
     if options.allow_as_string {
-        return Ok(Value::String(str.to_string()));
+        return Ok(Value::String(str.to_string(), CompletionState::Incomplete));
     }
 
     Err(anyhow::anyhow!("Failed to parse JSON"))

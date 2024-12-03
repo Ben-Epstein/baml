@@ -336,7 +336,7 @@ impl ArgCoercer {
                     }
                 }
             }
-            (FieldType::Constrained { .. }, _) => {
+            (FieldType::WithMetadata { .. }, _) => {
                 unreachable!("The return value of distribute_constraints can never be FieldType::Constrainted");
             }
         }?;
@@ -424,7 +424,7 @@ mod tests {
         )
         .unwrap();
         let value = BamlValue::Int(1);
-        let type_ = FieldType::Constrained {
+        let type_ = FieldType::WithMetadata {
             base: Box::new(FieldType::Primitive(TypeValue::Int)),
             constraints: vec![Constraint {
                 level: ConstraintLevel::Assert,
