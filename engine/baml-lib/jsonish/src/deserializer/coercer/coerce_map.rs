@@ -7,7 +7,7 @@ use crate::{
         deserialize_flags::{DeserializerConditions, Flag},
         types::BamlValueWithFlags,
     },
-    jsonish,
+    jsonish::{self, CompletionState},
 };
 use baml_types::{BamlMap, FieldType, LiteralValue, TypeValue};
 
@@ -64,7 +64,7 @@ pub(super) fn coerce_map(
     flags.add_flag(Flag::ObjectToMap(value.clone()));
 
     match &value {
-        jsonish::Value::Object(obj) => {
+        jsonish::Value::Object(obj, completion_state) => {
             let mut items = BamlMap::new();
             for (idx, (key, value)) in obj.iter().enumerate() {
                 let coerced_value =
@@ -85,11 +85,12 @@ pub(super) fn coerce_map(
                 // TODO: Is it necessary to check that values match here? This
                 // is also checked at `coerce_arg` in
                 // baml-lib/baml-core/src/ir/ir_helpers/to_baml_arg.rs
-                let key_as_jsonish = jsonish::Value::String(key.to_owned());
+                // TODO: Is it Ok that we assume keys are complete?
+                let key_as_jsonish = jsonish::Value::String(key.to_owned(), CompletionState::Complete);
                 match key_type.coerce(ctx, key_type, Some(&key_as_jsonish)) {
                     Ok(_) => {
                         // Hack to avoid cloning the key twice.
-                        let jsonish::Value::String(owned_key) = key_as_jsonish else {
+                        let jsonish::Value::String(owned_key, CompletionState::Complete) = key_as_jsonish else {
                             unreachable!("key_as_jsonish is defined as jsonish::Value::String");
                         };
 
@@ -102,6 +103,9 @@ pub(super) fn coerce_map(
                     // expected.
                     Err(e) => flags.add_flag(Flag::MapKeyParseError(idx, e)),
                 }
+            }
+            if *completion_state == CompletionState::Incomplete {
+                flags.add_flag(Flag::Incomplete);
             }
             Ok(BamlValueWithFlags::Map(flags, items))
         }

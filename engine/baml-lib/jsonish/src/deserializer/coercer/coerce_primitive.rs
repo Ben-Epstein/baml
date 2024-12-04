@@ -67,8 +67,10 @@ fn coerce_string(
 ) -> Result<BamlValueWithFlags, ParsingError> {
     if let Some(value) = value {
         match value {
-            crate::jsonish::Value::String(s) => {
-                Ok(BamlValueWithFlags::String(s.to_string().into()))
+            crate::jsonish::Value::String(s, completion_state) => {
+                let mut baml_value = BamlValueWithFlags::String(s.to_string().into());
+                baml_value.add_flag(Flag::Incomplete);
+                Ok(baml_value)
             }
             crate::jsonish::Value::Null => Err(ctx.error_unexpected_null(target)),
             v => Ok(BamlValueWithFlags::String(
@@ -86,8 +88,8 @@ pub(super) fn coerce_int(
     value: Option<&crate::jsonish::Value>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
     if let Some(value) = value {
-        match value {
-            crate::jsonish::Value::Number(n) => {
+        let mut result = match value {
+            crate::jsonish::Value::Number(n, _) => {
                 if let Some(n) = n.as_i64() {
                     Ok(BamlValueWithFlags::Int(n.into()))
                 } else if let Some(n) = n.as_u64() {
@@ -100,7 +102,7 @@ pub(super) fn coerce_int(
                     Err(ctx.error_unexpected_type(target, value))
                 }
             }
-            crate::jsonish::Value::String(s) => {
+            crate::jsonish::Value::String(s, _) => {
                 let s = s.trim();
                 // Trim trailing commas
                 let s = s.trim_end_matches(',');
@@ -124,13 +126,17 @@ pub(super) fn coerce_int(
                     Err(ctx.error_unexpected_type(target, value))
                 }
             }
-            crate::jsonish::Value::Array(items) => {
+            crate::jsonish::Value::Array(items, _) => {
                 coerce_array_to_singular(ctx, target, &items.iter().collect::<Vec<_>>(), &|value| {
                     coerce_int(ctx, target, Some(value))
                 })
             }
             _ => Err(ctx.error_unexpected_type(target, value)),
+        };
+        if let &CompletionState::Incomplete = value.completion_state() {
+            result.iter_mut().for_each(|v| v.add_flag(Flag::Incomplete));
         }
+        result
     } else {
         Err(ctx.error_unexpected_null(target))
     }

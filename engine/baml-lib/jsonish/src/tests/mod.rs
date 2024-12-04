@@ -22,7 +22,7 @@ use std::{
     path::PathBuf,
 };
 
-use baml_types::{BamlValue, EvaluationContext};
+use baml_types::{BamlValue, EvaluationContext, StreamingBehavior};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
     ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType, IRHelper, TypeValue},
@@ -69,7 +69,7 @@ fn find_existing_class_field(
     field_name: &str,
     class_walker: &Result<ClassWalker<'_>>,
     env_values: &EvaluationContext<'_>,
-) -> Result<(Name, FieldType, Option<String>)> {
+) -> Result<(Name, FieldType, Option<String>, bool)> {
     let Ok(class_walker) = class_walker else {
         anyhow::bail!("Class {} does not exist", class_name);
     };
@@ -81,7 +81,8 @@ fn find_existing_class_field(
     let name = Name::new_with_alias(field_name.to_string(), field_walker.alias(env_values)?);
     let desc = field_walker.description(env_values)?;
     let r#type = field_walker.r#type();
-    Ok((name, r#type.clone(), desc))
+    let streaming_needed = field_walker.item.attributes.get("streaming::needed").is_some(); // TODO: Check for True.
+    Ok((name, r#type.clone(), desc, streaming_needed))
 }
 
 fn find_enum_value(
@@ -200,7 +201,7 @@ fn relevant_data_models<'a>(
 
                     let fields = fields.collect::<Result<Vec<_>>>()?;
 
-                    for (_, t, _) in fields.iter().as_ref() {
+                    for (_, t, _, _) in fields.iter().as_ref() {
                         if !checked_types.contains(&t.to_string()) {
                             start.push(t.clone());
                         }
@@ -226,12 +227,13 @@ fn relevant_data_models<'a>(
                         name: Name::new_with_alias(cls.to_string(), walker?.alias(env_values)?),
                         fields,
                         constraints,
+                        streaming_behavior: StreamingBehavior::default(),
                     });
                 }
             }
             (FieldType::Literal(_), _) => {}
             (FieldType::Primitive(_), _constraints) => {}
-            (FieldType::Constrained { .. }, _) => {
+            (FieldType::WithMetadata { .. }, _) => {
                 unreachable!("It is guaranteed that a call to distribute_constraints will not return FieldType::Constrained")
             }
         }

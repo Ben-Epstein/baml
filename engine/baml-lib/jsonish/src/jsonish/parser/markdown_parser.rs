@@ -80,6 +80,8 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
 
 #[cfg(test)]
 mod test {
+    use crate::jsonish::CompletionState;
+
     use super::*;
     use test_log::test;
 
@@ -118,9 +120,13 @@ print("Hello, world!")
                 panic!("Expected AnyOf, got {:#?}", value);
             };
             assert!(value.contains(&Value::Object(
-                [("a".to_string(), Value::Number((1).into()))]
-                    .into_iter()
-                    .collect()
+                [(
+                    "a".to_string(),
+                    Value::Number((1).into(), CompletionState::Complete)
+                )]
+                .into_iter()
+                .collect(),
+                CompletionState::Complete
             )));
         }
         {
@@ -134,7 +140,10 @@ print("Hello, world!")
             let Value::AnyOf(value, _) = value else {
                 panic!("Expected AnyOf, got {:#?}", value);
             };
-            assert!(value.contains(&Value::String("This is a test".to_string())));
+            assert!(value.contains(&Value::String(
+                "This is a test".to_string(),
+                CompletionState::Complete
+            )));
         }
 
         Ok(())

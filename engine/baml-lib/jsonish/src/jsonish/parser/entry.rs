@@ -186,3 +186,15 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 
     Err(anyhow::anyhow!("Failed to parse JSON"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jsonish::{Value, CompletionState};
+
+    #[test]
+    fn test_partial_int() {
+        let res = parse("1", ParseOptions::default()).unwrap();
+        assert_eq!(res, Value::Number(1.into(), CompletionState::Incomplete));
+    }
+}
