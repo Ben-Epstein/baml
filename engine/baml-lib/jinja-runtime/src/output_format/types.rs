@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{Constraint, FieldType, TypeValue};
+use baml_types::{Constraint, FieldType, StreamingBehavior, TypeValue};
 use indexmap::{IndexMap, IndexSet};
 
 #[derive(Debug)]
@@ -48,9 +48,10 @@ pub struct Enum {
 #[derive(Debug)]
 pub struct Class {
     pub name: Name,
-    // fields have name, type and description.
-    pub fields: Vec<(Name, FieldType, Option<String>)>,
+    // fields have name, type, description, and streaming_needed.
+    pub fields: Vec<(Name, FieldType, Option<String>, bool)>,
     pub constraints: Vec<Constraint>,
+    pub streaming_behavior: StreamingBehavior,
 }
 
 #[derive(Debug, Clone)]
@@ -465,7 +466,7 @@ impl OutputFormatContent {
                     values: class
                         .fields
                         .iter()
-                        .map(|(name, field_type, description)| {
+                        .map(|(name, field_type, description, _streaming_needed)| {
                             Ok(ClassFieldRender {
                                 name: name.rendered_name().to_string(),
                                 description: description.clone(),

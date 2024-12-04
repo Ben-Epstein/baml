@@ -13,6 +13,7 @@ use super::{
     coerce_optional::coerce_optional, coerce_union::coerce_union, ir_ref::IrRef, ParsingContext,
     ParsingError,
 };
+use crate::jsonish::CompletionState;
 
 impl TypeCoercer for FieldType {
     fn coerce(
@@ -21,7 +22,7 @@ impl TypeCoercer for FieldType {
         target: &FieldType,
         value: Option<&crate::jsonish::Value>,
     ) -> Result<BamlValueWithFlags, ParsingError> {
-        match value {
+        let mut result = match value {
             Some(crate::jsonish::Value::AnyOf(candidates, primitive)) => {
                 log::debug!(
                     "scope: {scope} :: coercing to: {name} (current: {current})",
@@ -33,7 +34,7 @@ impl TypeCoercer for FieldType {
                     self.coerce(
                         ctx,
                         target,
-                        Some(&crate::jsonish::Value::String(primitive.clone())),
+                        Some(&crate::jsonish::Value::String(primitive.clone(), CompletionState::Complete)),
                     )
                 } else {
                     array_helper::coerce_array_to_singular(
@@ -44,7 +45,7 @@ impl TypeCoercer for FieldType {
                     )
                 }
             }
-            Some(crate::jsonish::Value::Markdown(_t, v)) => {
+            Some(crate::jsonish::Value::Markdown(_t, v, _completion)) => {
                 log::debug!(
                     "scope: {scope} :: coercing to: {name} (current: {current})",
                     name = target.to_string(),
@@ -63,7 +64,7 @@ impl TypeCoercer for FieldType {
                     v
                 })
             }
-            Some(crate::jsonish::Value::FixedJson(v, fixes)) => {
+            Some(crate::jsonish::Value::FixedJson(v, fixes, completion)) => {
                 log::debug!(
                     "scope: {scope} :: coercing to: {name} (current: {current})",
                     name = target.to_string(),
@@ -84,7 +85,7 @@ impl TypeCoercer for FieldType {
                 FieldType::Optional(_) => coerce_optional(ctx, self, value),
                 FieldType::Map(_, _) => coerce_map(ctx, self, value),
                 FieldType::Tuple(_) => Err(ctx.error_internal("Tuple not supported")),
-                FieldType::Constrained { base, .. } => {
+                FieldType::WithMetadata { base, .. } => {
                     let mut coerced_value = base.coerce(ctx, base, value)?;
                     let constraint_results = run_user_checks(&coerced_value.clone().into(), self)
                         .map_err(|e| ParsingError {
@@ -105,7 +106,11 @@ impl TypeCoercer for FieldType {
                     Ok(coerced_value)
                 }
             },
+        };
+        if let Some(CompletionState::Incomplete) = value.map(|v| v.completion_state()) {
+            result.iter_mut().for_each(|v| v.add_flag(Flag::Incomplete));
         }
+        result
     }
 }
 
@@ -183,7 +188,7 @@ impl DefaultValue for FieldType {
             }
             FieldType::Primitive(_) => None,
             // If it has constraints, we can't assume our defaults meet them.
-            FieldType::Constrained { .. } => None,
+            FieldType::WithMetadata { .. } => None,
         }
     }
 }

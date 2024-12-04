@@ -68,6 +68,8 @@ impl WithScore for Flag {
             Flag::NoFields(_) => 1,
             // No scores for contraints
             Flag::ConstraintResults(_) => 0,
+            // No scores for incompleteness.
+            Flag::Incomplete => 0,
         }
     }
 }

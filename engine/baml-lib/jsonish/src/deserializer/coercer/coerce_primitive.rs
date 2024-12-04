@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::BamlMediaType;
+use baml_types::{BamlMediaType};
 use internal_baml_core::ir::{FieldType, TypeValue};
 
 use crate::deserializer::{
@@ -7,6 +7,7 @@ use crate::deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
+use crate::jsonish::CompletionState;
 use regex::Regex;
 
 use super::{array_helper::coerce_array_to_singular, ParsingContext, ParsingError};
@@ -173,8 +174,8 @@ fn coerce_float(
     value: Option<&crate::jsonish::Value>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
     if let Some(value) = value {
-        match value {
-            crate::jsonish::Value::Number(n) => {
+        let mut result = match value {
+            crate::jsonish::Value::Number(n, completion) => {
                 if let Some(n) = n.as_f64() {
                     Ok(BamlValueWithFlags::Float(n.into()))
                 } else if let Some(n) = n.as_i64() {
@@ -185,7 +186,7 @@ fn coerce_float(
                     Err(ctx.error_unexpected_type(target, value))
                 }
             }
-            crate::jsonish::Value::String(s) => {
+            crate::jsonish::Value::String(s, _) => {
                 let s = s.trim();
                 // Trim trailing commas
                 let s = s.trim_end_matches(',');
@@ -203,13 +204,17 @@ fn coerce_float(
                     Err(ctx.error_unexpected_type(target, value))
                 }
             }
-            crate::jsonish::Value::Array(items) => {
+            crate::jsonish::Value::Array(items, _) => {
                 coerce_array_to_singular(ctx, target, &items.iter().collect::<Vec<_>>(), &|value| {
                     coerce_float(ctx, target, Some(value))
                 })
             }
             _ => Err(ctx.error_unexpected_type(target, value)),
+        };
+        if value.completion_state() == &CompletionState::Incomplete {
+            result.iter_mut().for_each(|v| v.add_flag(Flag::Incomplete));
         }
+        result
     } else {
         Err(ctx.error_unexpected_null(target))
     }
@@ -223,7 +228,7 @@ pub(super) fn coerce_bool(
     if let Some(value) = value {
         match value {
             crate::jsonish::Value::Boolean(b) => Ok(BamlValueWithFlags::Bool((*b).into())),
-            crate::jsonish::Value::String(s) => match s.to_lowercase().as_str() {
+            crate::jsonish::Value::String(s, _) => match s.to_lowercase().as_str() {
                 "true" => Ok(BamlValueWithFlags::Bool(
                     (true, Flag::StringToBool(s.clone())).into(),
                 )),
@@ -256,7 +261,7 @@ pub(super) fn coerce_bool(
                     }
                 }
             },
-            crate::jsonish::Value::Array(items) => {
+            crate::jsonish::Value::Array(items, _) => {
                 coerce_array_to_singular(ctx, target, &items.iter().collect::<Vec<_>>(), &|value| {
                     coerce_bool(ctx, target, Some(value))
                 })

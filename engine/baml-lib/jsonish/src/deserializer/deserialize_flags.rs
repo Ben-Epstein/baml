@@ -47,6 +47,9 @@ pub enum Flag {
 
     /// Constraint results (only contains checks)
     ConstraintResults(Vec<(String, JinjaExpression, bool)>),
+
+    /// Completion state for the top-level node of the value is Incomplete.
+    Incomplete
 }
 
 #[derive(Clone)]
@@ -96,6 +99,7 @@ impl DeserializerConditions {
                 Flag::UnionMatch(_idx, _) => None,
                 Flag::DefaultButHadUnparseableValue(e) => Some(e.clone()),
                 Flag::ConstraintResults(_) => None,
+                Flag::Incomplete => None,
             })
             .collect::<Vec<_>>()
     }
@@ -255,6 +259,9 @@ impl std::fmt::Display for Flag {
                         level = ConstraintLevel::Check
                     )?;
                 }
+            }
+            Flag::Incomplete => {
+                write!(f, "Value is incompletely streamed")?;
             }
         }
         Ok(())
