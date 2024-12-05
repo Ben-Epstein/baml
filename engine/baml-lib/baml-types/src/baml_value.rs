@@ -4,6 +4,7 @@ use std::{
     fmt,
 };
 
+use indexmap::IndexMap;
 use serde::ser::SerializeMap;
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
@@ -492,6 +493,62 @@ impl<T> BamlValueWithMeta<T> {
             ),
             BamlValueWithMeta::Null(m) => BamlValueWithMeta::Null(f(m)),
         }
+    }
+
+    pub fn zip_meta<U>(self, other: BamlValueWithMeta<U>) -> Option<BamlValueWithMeta<(T,U)>> {
+        let ret = match (self, other) {
+            (BamlValueWithMeta::String(s1, meta1), BamlValueWithMeta::String(s2, meta2)) if s1 == s2 => BamlValueWithMeta::String(s1, (meta1, meta2)),
+            (BamlValueWithMeta::String(_,_), _) => return None,
+            (BamlValueWithMeta::Int(s1, meta1), BamlValueWithMeta::Int(s2, meta2)) if s1 == s2 => BamlValueWithMeta::Int(s1, (meta1, meta2)),
+            (BamlValueWithMeta::Int(_,_), _) => return None,
+            (BamlValueWithMeta::Float(s1, meta1), BamlValueWithMeta::Float(s2, meta2)) if s1 == s2 => BamlValueWithMeta::Float(s1, (meta1, meta2)),
+            (BamlValueWithMeta::Float(_,_), _) => return None,
+            (BamlValueWithMeta::Bool(s1, meta1), BamlValueWithMeta::Bool(s2, meta2)) if s1 == s2 => BamlValueWithMeta::Bool(s1, (meta1, meta2)),
+            (BamlValueWithMeta::Bool(_,_), _) => return None,
+            (BamlValueWithMeta::Map(mut s1, meta1), BamlValueWithMeta::Map(mut s2, meta2)) => {
+                s1.sort_unstable_keys();
+                s2.sort_unstable_keys();
+                let map_result = s1.into_iter().zip(s2).map(|((k1,v1), (_k2,v2))| {
+                    v1.zip_meta(v2).map(|res| (k1, res))
+                }).collect::<Option<IndexMap<_, _>>>();
+                match map_result {
+                    None => return None,
+                    Some(r) => BamlValueWithMeta::Map(r, (meta1, meta2))
+                }
+            },
+            (BamlValueWithMeta::Map(_,_), _) => return None,
+            (BamlValueWithMeta::List(l1, meta1), BamlValueWithMeta::List(l2, meta2)) => {
+                let list_result = l1.into_iter().zip(l2).map(|(item1, item2)| {
+                    item1.zip_meta(item2)
+                }).collect::<Option<Vec<_>>>();
+                match list_result {
+                    None => return None,
+                    Some(r) => BamlValueWithMeta::List(r, (meta1, meta2))
+                }
+            }
+            (BamlValueWithMeta::List(_,_), _) => return None,
+            (BamlValueWithMeta::Media(m1, meta1), BamlValueWithMeta::Media(m2, meta2)) if m1 == m2 => {
+                BamlValueWithMeta::Media(m1, (meta1, meta2))
+            }
+            (BamlValueWithMeta::Media(_, _), _) => return None,
+            (BamlValueWithMeta::Enum(x1, y1, meta1), BamlValueWithMeta::Enum(x2, y2, meta2)) if x1 == x2 && y1 == y2 => {
+                BamlValueWithMeta::Enum(x1, y1, (meta1, meta2))
+            }
+            (BamlValueWithMeta::Enum(_, _, _), _) => return None,
+            (BamlValueWithMeta::Class(name1, mut fields1, meta1), BamlValueWithMeta::Class(name2, mut fields2, meta2)) if name1 == name2 => {
+                fields1.sort_unstable_keys();
+                fields2.sort_unstable_keys();
+                let map_result = fields1.into_iter().zip(fields2).map(|((k1,v1),(_k2,v2))| {
+                    v1.zip_meta(v2).map(|r| (k1, r))
+                }).collect::<Option<IndexMap<_,_>>>();
+                match map_result {
+                    None => return None,
+                    Some(r) => BamlValueWithMeta::Class(name1, r, (meta1, meta2))
+                }
+            }
+            _ => todo!()
+        };
+        Some(ret)
     }
 }
 

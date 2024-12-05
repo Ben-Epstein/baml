@@ -54,7 +54,7 @@ pub enum Flag {
 
 #[derive(Clone)]
 pub struct DeserializerConditions {
-    pub(super) flags: Vec<Flag>,
+    pub flags: Vec<Flag>,
 }
 
 impl DeserializerConditions {
