@@ -357,3 +357,31 @@ test_partial_deserializer!(
     ]
   }
 );
+
+
+const SEMANTIC_STREAMING_BAML_FILE: &str = r##"
+class Foo {
+  a int @streaming::done
+  b int @streaming::needed
+  c string @streaming::state
+  @@streaming::done
+}
+
+class Foos {
+  fs Foo[]
+  fs_done Foo[] @streaming::done
+}
+"##;
+
+const FOO_PAYLOAD: &str = r#"
+   {"a": 1, "b": 2, "c": "hello"}
+"#;
+// 0    5    10   15   20
+
+test_partial_deserializer!(
+  test_semantic_streaming,
+  SEMANTIC_STREAMING_BAML_FILE,
+  FOO_PAYLOAD.get(0..5).unwrap(),
+  FieldType::Class("Foo".to_string()),
+  {}
+);

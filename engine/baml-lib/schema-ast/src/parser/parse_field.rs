@@ -107,13 +107,11 @@ pub(crate) fn parse_type_expr(
         }
     }
 
-    eprintln!("Before name: {name:?}\nfield_type: {field_type:?}\nfield_attrs:{field_attributes:?}");
     // Strip certain attributes from the field and attach them to the type.
     match field_type.as_mut() {
         None => {}
         Some(ft) => reassociate_type_attributes(&mut field_attributes, ft),
     }
-    eprintln!("After.\nfield_type: {field_type:?}\nfield_attrs:{field_attributes:?}\n");
 
     match (name, &field_type) {
         // Class field.

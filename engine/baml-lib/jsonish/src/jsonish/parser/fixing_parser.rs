@@ -46,7 +46,7 @@ pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes
 
     // If we still have a collection open, close it
     while !state.collection_stack.is_empty() {
-        state.complete_collection();
+        state.complete_collection(CompletionState::Incomplete);
     }
 
     // Determine what to return.

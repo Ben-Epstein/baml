@@ -29,7 +29,7 @@ pub enum Value {
 
     // Fixed types
     Markdown(String, Box<Value>, CompletionState),
-    FixedJson(Box<Value>, Vec<Fixes>, CompletionState),
+    FixedJson(Box<Value>, Vec<Fixes>, CompletionState), // TODO: Does this really need a CompletionState?
     AnyOf(Vec<Value>, String),
 }
 
@@ -224,9 +224,20 @@ impl std::fmt::Display for Value {
     }
 }
 
+// The serde implementation is used as one of our parsing options.
+// We deserialize into a "complete" value, and this property is
+// true for nested values, because serde will call the same `deserialize`
+// method on children of a serde container.
+//
+// Numbers and strings should be considered Incomplete if they are encountered
+// at the top level. Therefore the non-recursive callsite of `deserialize`
+// is responsible for setting completion state to Incomplete for top-level
+// strings and numbers.
+//
+// Lists and objects at the top level are necessarily complete, because
+// serde will not parse an array or an object unless the closing delimiter
+// is present.
 impl<'de> serde::Deserialize<'de> for Value {
-    // When values are serialized or deserialized, we consider them
-    // complete.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

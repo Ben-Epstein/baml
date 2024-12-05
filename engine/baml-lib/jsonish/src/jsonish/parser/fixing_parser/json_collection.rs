@@ -49,6 +49,21 @@ impl JsonCollection {
             JsonCollection::BlockComment(_, _) => "Comment",
         }
     }
+
+    pub fn completion_state(&self) -> &CompletionState {
+        match self {
+            JsonCollection::Object(_, _, s) => s,
+            JsonCollection::Array(_, s) => s,
+            JsonCollection::QuotedString(_, s) => s,
+            JsonCollection::SingleQuotedString(_, s) => s,
+            JsonCollection::TripleBacktickString { content, .. } => &content.1, // TODO: correct?
+            JsonCollection::BacktickString(_, s) => s,
+            JsonCollection::TripleQuotedString(_, s) => s,
+            JsonCollection::UnquotedString(_, s) => s,
+            JsonCollection::TrailingComment(_, s) => s,
+            JsonCollection::BlockComment(_, s) => s,
+        }
+    }
 }
 
 impl From<JsonCollection> for Option<Value> {
