@@ -15,7 +15,7 @@ use baml_types::{BamlMap, BamlValueWithMeta, JinjaExpression, ResponseCheck};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::AllowedRoleMetadata;
-use jsonish::BamlValueWithFlags;
+use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
@@ -26,9 +26,11 @@ use wasm_bindgen::JsValue;
 
 /// Validate a parsed value, checking asserts and checks.
 pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> ResponseBamlValue {
+
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
         baml_value.clone().into();
-    baml_value_with_meta.map_meta(|cs| {
+
+    let value_with_response_checks = baml_value_with_meta.map_meta(|cs| {
         cs.iter()
             .map(|(label, expr, result)| {
                 let status = (if *result { "succeeded" } else { "failed" }).to_string();
@@ -39,13 +41,10 @@ pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> ResponseBaml
                 }
             })
             .collect()
-    })
-}
+    });
 
-impl ResponseBamlValue {
-    pub fn score(&self) -> u32 {
-        self.meta().0.score()
-    }
+    let response_value = validate_streaming_state();
+    response_value
 }
 
 #[derive(Clone, Copy, PartialEq)]

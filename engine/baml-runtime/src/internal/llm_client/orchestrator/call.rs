@@ -1,7 +1,7 @@
 use anyhow::Result;
 use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use jsonish::BamlValueWithFlags;
+use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use web_time::Duration;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
         llm_client::{
             parsed_value_to_response,
             traits::{WithPrompt, WithSingleCallable},
-            LLMResponse, ResponseBamlValue,
+            LLMResponse,
         },
         prompt_renderer::PromptRenderer,
     },

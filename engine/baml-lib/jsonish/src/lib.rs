@@ -5,7 +5,7 @@ use anyhow::Result;
 pub mod deserializer;
 mod jsonish;
 
-use baml_types::{BamlValue, BamlValueWithMeta, FieldType, ResponseCheck};
+use baml_types::{BamlValue, BamlValueWithMeta, FieldType, ResponseCheck, JinjaExpression};
 use deserializer::coercer::{ParsingContext, TypeCoercer};
 
 pub use deserializer::types::BamlValueWithFlags;
@@ -24,7 +24,7 @@ pub fn from_str(
     target: &FieldType,
     raw_string: &str,
     allow_partials: bool,
-) -> Result<ResponseBamlValue> {
+) -> Result<BamlValueWithFlags> {
     if matches!(target, FieldType::Primitive(TypeValue::String)) {
         return Ok(ResponseBamlValue(BamlValueWithMeta::String(raw_string.to_string().into(), (Vec::new(), Vec::new(), None))));
     }
@@ -53,7 +53,7 @@ pub fn from_str(
     // Determine the best way to get the desired schema from the parsed schema.
 
     // Lets try to now coerce the value into the expected schema.
-    match target.coerce(&ctx, target, Some(&value)) {
+    let parsed_value: BamlValueWithFlags = match target.coerce(&ctx, target, Some(&value)) {
         Ok(v) => {
             if v.conditions()
                 .flags()
@@ -63,11 +63,15 @@ pub fn from_str(
                 anyhow::bail!("Failed to coerce value: {:?}", v.conditions().flags());
             }
 
-            Ok(v)
+            Ok::<BamlValueWithFlags, anyhow::Error>(v)
         }
         Err(e) => anyhow::bail!("Failed to coerce value: {}", e),
-    }
+    }?;
+    
+    Ok(parsed_value)
+
 }
+
 
 impl ResponseBamlValue { 
     pub fn score(&self) -> i32 {
