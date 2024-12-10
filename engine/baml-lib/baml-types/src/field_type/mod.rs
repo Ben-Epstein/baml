@@ -268,6 +268,15 @@ pub struct StreamingBehavior {
     pub state: bool,
 }
 
+impl StreamingBehavior {
+    pub fn combine(&self, other: &StreamingBehavior) -> StreamingBehavior {
+        StreamingBehavior {
+            done: self.done || other.done,
+            state: self.state || other.state,
+        }
+    }
+}
+
 impl Default for StreamingBehavior {
     fn default() -> Self {
         StreamingBehavior { done: false, state: false }

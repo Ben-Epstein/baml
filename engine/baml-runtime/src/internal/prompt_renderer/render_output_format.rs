@@ -72,7 +72,7 @@ fn find_new_class_field(
     class_walker: &Result<ClassWalker<'_>>,
     overrides: &RuntimeClassOverride,
     _ctx: &RuntimeContext,
-) -> Result<(Name, FieldType, Option<String>)> {
+) -> Result<(Name, FieldType, Option<String>, bool)> {
     let Some(field_overrides) = overrides.new_fields.get(field_name) else {
         anyhow::bail!("Class {} does not have a field: {}", class_name, field_name);
     };
@@ -94,7 +94,7 @@ fn find_new_class_field(
     let name = Name::new_with_alias(field_name.to_string(), alias.value());
     let desc = desc.value();
 
-    Ok((name, field_overrides.0.clone(), desc))
+    Ok((name, field_overrides.0.clone(), desc, false)) // TODO: Field overrides are not "streaming::needed". Should this be configurable?
 }
 
 fn find_existing_class_field(
@@ -103,7 +103,7 @@ fn find_existing_class_field(
     class_walker: &Result<ClassWalker<'_>>,
     overrides: &Option<&RuntimeClassOverride>,
     ctx: &RuntimeContext,
-) -> Result<(Name, FieldType, Option<String>)> {
+) -> Result<(Name, FieldType, Option<String>, bool)> {
     let Ok(class_walker) = class_walker else {
         anyhow::bail!("Class {} does not exist", class_name);
     };
@@ -116,10 +116,12 @@ fn find_existing_class_field(
 
     let mut alias = OverridableValue::Unset;
     let mut desc = OverridableValue::Unset;
+    let mut needed = OverridableValue::Unset;
 
     if let Some(attrs) = field_overrides {
         alias = OverridableValue::<String>::from(attrs.alias.as_ref());
         desc = OverridableValue::<String>::from(attrs.meta.get("description"));
+        needed = OverridableValue::<bool>::from(attrs.meta.get("streaming::needed"));
     }
 
     let eval_ctx = ctx.eval_ctx(false);
@@ -136,10 +138,12 @@ fn find_existing_class_field(
         }
     }
 
+
     let name = Name::new_with_alias(field_name.to_string(), alias.value());
     let desc = desc.value();
     let r#type = field_walker.r#type();
-    Ok((name, r#type.clone(), desc))
+    let needed = needed.value().unwrap_or(false);
+    Ok((name, r#type.clone(), desc, needed))
 }
 
 fn find_enum_value(
@@ -220,8 +224,8 @@ fn relevant_data_models<'a>(
     let eval_ctx = ctx.eval_ctx(false);
 
     while let Some(output) = start.pop() {
-        match ir.distribute_constraints(&output) {
-            (FieldType::Enum(enm), constraints) => {
+        match ir.distribute_metadata(&output) {
+            (FieldType::Enum(enm), (constraints, streaming_behavior)) => {
                 if checked_types.insert(output.to_string()) {
                     let overrides = ctx.enum_overrides.get(enm);
                     let walker = ir.find_enum(enm);
@@ -289,7 +293,7 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Class(cls), constraints) => {
+            (FieldType::Class(cls), (constraints, streaming_behavior)) => {
                 if checked_types.insert(output.to_string()) {
                     let overrides = ctx.class_override.get(cls);
                     let walker = ir.find_class(cls);
@@ -337,7 +341,7 @@ fn relevant_data_models<'a>(
 
                     let fields = fields.chain(new_fields).collect::<Result<Vec<_>>>()?;
 
-                    for (_, t, _) in fields.iter().as_ref() {
+                    for (_, t, _, _) in fields.iter().as_ref() {
                         if !checked_types.contains(&t.to_string()) {
                             start.push(t.clone());
                         }
@@ -363,6 +367,7 @@ fn relevant_data_models<'a>(
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
                         fields,
                         constraints,
+                        streaming_behavior,
                     });
                 } else {
                     recursive_classes.insert(cls.to_owned());

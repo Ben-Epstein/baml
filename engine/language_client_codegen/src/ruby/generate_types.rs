@@ -203,7 +203,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(),
-            FieldType::Constrained { base, .. } => match field_type_attributes(self) {
+            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_partial_type_ref();
                     format!("Baml::Checked[{base_type_ref}]")

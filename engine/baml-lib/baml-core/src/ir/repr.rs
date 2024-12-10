@@ -239,6 +239,19 @@ impl NodeAttributes {
     pub fn get(&self, key: &str) -> Option<&UnresolvedValue<()>> {
         self.meta.get(key)
     }
+
+    pub fn streaming_behavior(&self) -> StreamingBehavior {
+        fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
+            match maybe_value {
+                Some(Resolvable::Bool(true, _)) => true,
+                _ => false,
+            }
+        }
+        StreamingBehavior {
+            done: is_some_true(self.get("streaming::done")),
+            state: is_some_true(self.get("streaming::state")),
+        }
+    }
 }
 
 impl Default for NodeAttributes {
@@ -439,7 +452,7 @@ impl WithRepr<FieldType> for ast::FieldType {
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
         let attributes = WithRepr::attributes(self, db);
         let has_constraints = !attributes.constraints.is_empty();
-        let streaming_behavior = streaming_behavior_from_attributes(&attributes);
+        let streaming_behavior = attributes.streaming_behavior();
         let base = match self {
             ast::FieldType::Primitive(arity, typeval, ..) => {
                 let repr = FieldType::Primitive(*typeval);

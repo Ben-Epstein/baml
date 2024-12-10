@@ -26,7 +26,7 @@ pub fn from_str(
     }
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
-    let mut value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
+    let value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
     // let schema = deserializer::schema::from_jsonish_value(&value, None);
 
     // See Note [Streaming Number Invalidation]

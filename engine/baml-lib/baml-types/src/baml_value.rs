@@ -466,9 +466,9 @@ impl<T> BamlValueWithMeta<T> {
         }
     }
 
-    pub fn map_meta<F, U>(&self, f: F) -> BamlValueWithMeta<U>
+    pub fn map_meta<'a, F, U>(&'a self, f: F) -> BamlValueWithMeta<U>
     where
-        F: Fn(&T) -> U + Copy,
+        F: Fn(&'a T) -> U + Copy,
     {
         match self {
             BamlValueWithMeta::String(v, m) => BamlValueWithMeta::String(v.clone(), f(m)),

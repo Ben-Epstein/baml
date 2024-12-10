@@ -230,7 +230,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Optional(inner) => {
                 format!("Optional[{}]", inner.to_type_ref(ir, _with_checked))
             }
-            FieldType::Constrained { base, .. } => match field_type_attributes(self) {
+            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_type_ref(ir, _with_checked);
                     let checks_type_ref = type_name_for_checks(&checks);
@@ -284,7 +284,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(ir, with_checked),
-            FieldType::Constrained { base, .. } => match field_type_attributes(self) {
+            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_partial_type_ref(ir, with_checked);
                     let checks_type_ref = type_name_for_checks(&checks);
