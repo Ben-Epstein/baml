@@ -383,5 +383,5 @@ test_partial_deserializer!(
   SEMANTIC_STREAMING_BAML_FILE,
   FOO_PAYLOAD.get(0..5).unwrap(),
   FieldType::Class("Foo".to_string()),
-  {}
+  {"a": 1, "b": null, "c": null}
 );

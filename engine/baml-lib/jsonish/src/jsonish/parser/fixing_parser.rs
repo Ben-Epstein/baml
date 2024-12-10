@@ -71,7 +71,7 @@ pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes
                                 Value::FixedJson(f.1.into(), f.2, completion_state)
                             })
                             .collect(),
-                        todo!("Is this array complete?")
+                        CompletionState::Incomplete // TODO: Is it complete?
                     ),
                     vec![Fixes::InferredArray],
                 )])

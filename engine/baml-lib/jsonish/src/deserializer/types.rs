@@ -93,7 +93,6 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<Flag>> {
                 BamlValueWithMeta::Class(name, fields.into_iter().map(|(k,v)| (k, BamlValueWithMeta::from(v))).collect(), conds.flags),
             BamlValueWithFlags::Null(v) => BamlValueWithMeta::Null(v.flags),
             BamlValueWithFlags::Media(v) => BamlValueWithMeta::Media(v.value, v.flags.flags),
-            _ => todo!()
         }
     }
 }
