@@ -8,7 +8,7 @@ pub(crate) mod internal;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
 pub mod client_registry;
-pub mod constraints;
+pub mod test_constraints;
 pub mod errors;
 pub mod request;
 mod runtime;
@@ -64,7 +64,7 @@ pub use internal_baml_core::internal_baml_diagnostics;
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
 pub use internal_baml_core::ir::{scope_diagnostics, FieldType, IRHelper, TypeValue};
 
-use crate::constraints::{evaluate_test_constraints, TestConstraintsResult};
+use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 use crate::internal::llm_client::LLMResponse;
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -24,8 +24,6 @@ use reqwest::StatusCode;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
-pub type ResponseBamlValue = BamlValueWithMeta<Vec<ResponseCheck>>;
-
 /// Validate a parsed value, checking asserts and checks.
 pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> ResponseBamlValue {
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
@@ -42,6 +40,12 @@ pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> ResponseBaml
             })
             .collect()
     })
+}
+
+impl ResponseBamlValue {
+    pub fn score(&self) -> u32 {
+        self.meta().0.score()
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]

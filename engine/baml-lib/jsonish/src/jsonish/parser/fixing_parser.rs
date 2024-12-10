@@ -68,7 +68,7 @@ pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes
                             .into_iter()
                             .map(|f| {
                                 let completion_state = f.1.completion_state().clone();
-                                Value::FixedJson(f.1.into(), f.2, completion_state)
+                                Value::FixedJson(f.1.into(), f.2)
                             })
                             .collect(),
                         CompletionState::Incomplete // TODO: Is it complete?

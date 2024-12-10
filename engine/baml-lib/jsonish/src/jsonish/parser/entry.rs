@@ -40,7 +40,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                 Value::Markdown(_, _, completion_state) => {
                     *completion_state = CompletionState::Incomplete;
                 }
-                Value::FixedJson(_, _, completion_state) => {
+                Value::FixedJson(_, _) => {
                     unreachable!("Serde deserializes into concrete values, not FixedJson")
                 }
                 Value::AnyOf(_, _) => {
@@ -150,7 +150,6 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                                 .ok_or_else(|| anyhow::anyhow!("Expected 1 item"))?
                                 .into(),
                             vec![Fixes::GreppedForJSON],
-                            CompletionState::Incomplete,
                         )],
                         str.to_string(),
                     ));
@@ -165,7 +164,6 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             Value::FixedJson(
                                 v.into(),
                                 vec![Fixes::GreppedForJSON],
-                                CompletionState::Incomplete,
                             )
                         })
                         .collect::<Vec<_>>();
@@ -191,7 +189,6 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             vec![Value::FixedJson(
                                 v.into(),
                                 fixes,
-                                CompletionState::Incomplete,
                             )],
                             str.to_string(),
                         ));
@@ -208,7 +205,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                         let items = items
                             .into_iter()
                             .map(|(v, fixes)| {
-                                Value::FixedJson(v.into(), fixes, CompletionState::Incomplete)
+                                Value::FixedJson(v.into(), fixes)
                             })
                             .collect::<Vec<_>>();
 
@@ -245,7 +242,7 @@ mod tests {
     }
 
     fn to_fixed(inner: Value, fixes: &[Fixes]) -> Value {
-        Value::FixedJson(Box::new(inner), fixes.to_vec(), CompletionState::Incomplete)
+        Value::FixedJson(Box::new(inner), fixes.to_vec())
     }
 
     #[test]

@@ -1,6 +1,6 @@
 pub use crate::internal::llm_client::LLMResponse;
 use crate::{
-    constraints::TestConstraintsResult,
+    test_constraints::TestConstraintsResult,
     errors::ExposedError,
     internal::llm_client::{orchestrator::OrchestrationScope, ResponseBamlValue},
 };

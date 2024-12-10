@@ -64,7 +64,7 @@ impl TypeCoercer for FieldType {
                     v
                 })
             }
-            Some(crate::jsonish::Value::FixedJson(v, fixes, completion)) => {
+            Some(crate::jsonish::Value::FixedJson(v, fixes)) => {
                 log::debug!(
                     "scope: {scope} :: coercing to: {name} (current: {current})",
                     name = target.to_string(),

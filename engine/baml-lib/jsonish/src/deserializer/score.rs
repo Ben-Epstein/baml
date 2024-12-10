@@ -85,3 +85,9 @@ impl WithScore for DeserializerConditions {
         self.flags.iter().map(WithScore::score).sum()
     }
 }
+
+impl WithScore for Vec<Flag> {
+    fn score(&self) -> i32 {
+        self.iter().map(WithScore::score).sum()
+    }
+}

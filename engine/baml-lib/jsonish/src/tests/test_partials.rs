@@ -363,13 +363,17 @@ const SEMANTIC_STREAMING_BAML_FILE: &str = r##"
 class Foo {
   a int @streaming::done
   b int @streaming::needed
-  c string @streaming::state
+  c string @streaming::done
   @@streaming::done
 }
 
 class Foos {
   fs Foo[]
   fs_done Foo[] @streaming::done
+}
+
+class Ints {
+  ints int[]
 }
 "##;
 
@@ -381,7 +385,13 @@ const FOO_PAYLOAD: &str = r#"
 test_partial_deserializer!(
   test_semantic_streaming,
   SEMANTIC_STREAMING_BAML_FILE,
-  FOO_PAYLOAD.get(0..5).unwrap(),
+  r#"{"a":1, "b": 2, "c": "hell"#,
   FieldType::Class("Foo".to_string()),
-  {"a": 1, "b": null, "c": null}
+  {"a": 1, "b": 2, "c": "hello"}
 );
+
+// test_partial_deserializer!(
+//   test_semantic_streaming_list,
+//   SEMANTIC_STREAMING_BAML_FILE,
+//   ""
+// )

@@ -29,7 +29,7 @@ pub enum Value {
 
     // Fixed types
     Markdown(String, Box<Value>, CompletionState),
-    FixedJson(Box<Value>, Vec<Fixes>, CompletionState), // TODO: Does this really need a CompletionState?
+    FixedJson(Box<Value>, Vec<Fixes>), // TODO: Does this really need a CompletionState?
     AnyOf(Vec<Value>, String),
 }
 
@@ -58,7 +58,7 @@ impl Hash for Value {
                 s.hash(state);
                 v.hash(state);
             }
-            Value::FixedJson(v, _, _) => v.hash(state),
+            Value::FixedJson(v, _) => v.hash(state),
             Value::AnyOf(items, _) => {
                 for item in items {
                     item.hash(state);
@@ -105,7 +105,7 @@ impl Value {
             Value::Markdown(tag, item, _) => {
                 format!("Markdown:{} - {}", tag, item.r#type())
             }
-            Value::FixedJson(inner, fixes, _) => {
+            Value::FixedJson(inner, fixes) => {
                 format!("{} ({} fixes)", inner.r#type(), fixes.len())
             }
             Value::AnyOf(items, _) => {
@@ -129,7 +129,7 @@ impl Value {
             Value::Object(_, s) => s,
             Value::Array(_, s) => s,
             Value::Markdown(_, _, s) => s,
-            Value::FixedJson(_, _, s) => s,
+            Value::FixedJson(_, _) => &CompletionState::Complete,
             Value::AnyOf(choices, _) => {
                 if choices
                     .iter()
@@ -158,7 +158,9 @@ impl Value {
                 elems.iter_mut().for_each(|v| v.complete_deeply());
             }
             Value::Markdown(_, _, s) => *s = CompletionState::Complete,
-            Value::FixedJson(_, _, s) => *s = CompletionState::Complete,
+            Value::FixedJson(val, fixes) => {
+                val.complete_deeply();
+            },
             Value::AnyOf(choices, _) => choices.iter_mut().for_each(|v| v.complete_deeply()),
         }
     }
@@ -175,7 +177,7 @@ impl Value {
                 CompletionState::Complete,
             ),
             Value::Markdown(x, y, _) => Value::Markdown(x, y, CompletionState::Complete),
-            Value::FixedJson(x, y, _) => Value::FixedJson(x, y, CompletionState::Complete),
+            Value::FixedJson(x, y) => Value::FixedJson(x, y),
             Value::AnyOf(choices, s) => Value::AnyOf(
                 choices.into_iter().map(|v| v.completed_deeply()).collect(),
                 s,
@@ -212,7 +214,7 @@ impl std::fmt::Display for Value {
                 write!(f, "]")
             }
             Value::Markdown(s, v, _) => write!(f, "{}\n{}", s, v),
-            Value::FixedJson(v, _, _) => write!(f, "{}", v),
+            Value::FixedJson(v, _) => write!(f, "{}", v),
             Value::AnyOf(items, s) => {
                 write!(f, "AnyOf[{},", s)?;
                 for item in items {
