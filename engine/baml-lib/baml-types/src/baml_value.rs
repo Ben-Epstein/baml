@@ -701,71 +701,76 @@ impl<T> From<BamlValueWithMeta<T>> for BamlValue {
 //     }
 // }
 
-impl <T, M> Serialize for BamlValueWithMeta<M> {
+impl <T> Serialize for BamlValueWithMeta<T>
+  where BamlValueWithMeta<T>: SerializeMetadata,
+{
+
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        M: SerializeMetadata,
     {
+        let metadata_fields = &self.metadata_fields();
         match self {
-           BamlValueWithMeta::String(v, metadata) => serialize_with_checks(v, metadata, serializer),
-           BamlValueWithMeta::Int(v, metadata) => serialize_with_checks(v, metadata, serializer),
-           BamlValueWithMeta::Float(v, metadata) => serialize_with_checks(v, metadata, serializer),
-           BamlValueWithMeta::Bool(v, metadata) => serialize_with_checks(v, metadata, serializer),
-           BamlValueWithMeta::Map(v, metadata) => {
+           BamlValueWithMeta::String(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
+           BamlValueWithMeta::Int(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
+           BamlValueWithMeta::Float(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
+           BamlValueWithMeta::Bool(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
+           BamlValueWithMeta::Map(v, _metadata) => {
                let mut map = serializer.serialize_map(None)?;
                for (key, value) in v {
-                   map.serialize_entry(key, value)?;
+                   map.serialize_entry::<String, BamlValueWithMeta<T>>(key, value)?;
                }
-               add_checks(&mut map, metadata)?;
+               add_checks(&mut map, &self.metadata_fields())?;
                map.end()
            }
-           BamlValueWithMeta::List(v, metadata) => serialize_with_checks(v, metadata, serializer),
-           BamlValueWithMeta::Media(v, metadata) => serialize_with_checks(v, metadata, serializer),
-           BamlValueWithMeta::Enum(_enum_name, v, metadata) => serialize_with_checks(v, metadata, serializer),
-           BamlValueWithMeta::Class(_class_name, v, metadata) => {
-               if cr.is_empty() {
+           BamlValueWithMeta::List(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
+           BamlValueWithMeta::Media(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
+           BamlValueWithMeta::Enum(_enum_name, v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
+           BamlValueWithMeta::Class(_class_name, v, _metadata) => {
+               let metadata_fields = self.metadata_fields();
+               if metadata_fields.is_empty() {
                    let mut map = serializer.serialize_map(None)?;
                    for (key, value) in v {
                        map.serialize_entry(key, value)?;
                    }
-                   add_checks(&mut map, metadata)?;
+                   add_checks(&mut map, &metadata_fields)?;
                    map.end()
                } else {
                    let mut checked_value = serializer.serialize_map(Some(2))?;
                    checked_value.serialize_entry("value", &v)?;
-                   add_checks(&mut checked_value, metadata)?;
+                   add_checks(&mut checked_value, &metadata_fields)?;
                    checked_value.end()
                }
            }
-           BamlValueWithMeta::Null(metadata) => serialize_with_checks(&(), metadata, serializer),
+           BamlValueWithMeta::Null(_) => serialize_with_checks(&(), &self.metadata_fields(), serializer),
        }
     }
 }
 
-fn serialize_with_checks<S, T: Serialize, M: SerializeMetadata>(
+fn serialize_with_checks<S, T: Serialize>(
     value: &T,
-    metadata: M,
+    metadata_fields: &Vec<(String, serde_json::Value)>,
     serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    if !(checks.is_empty() && completion_state.is_none()) {
+    if !metadata_fields.is_empty() {
         let mut map = serializer.serialize_map(Some(2))?;
         map.serialize_entry("value", value)?;
-        add_checks(&mut map, metadata)?;
+        add_checks(&mut map, metadata_fields)?;
         map.end()
     } else {
         value.serialize(serializer)
     }
 }
 
-fn add_checks<'a, S: SerializeMap, M: SerializeMetadata>(
+fn add_checks<'a, S: SerializeMap>(
     map: &'a mut S,
-    metadata: M,
-) -> Result<(), S::Error> {
-    metadata.metadata_fields().iter().try_for_each(|(field_name, value)| {
+    metadata_fields: &Vec<(String, serde_json::Value)>,
+) -> Result<(), S::Error>
+{
+    metadata_fields.iter().try_for_each(|(field_name, value)| {
         map.serialize_entry(&field_name, &value)
     })?;
     // if !checks.is_empty() {
@@ -785,12 +790,28 @@ pub trait SerializeMetadata {
     fn metadata_fields(&self) -> Vec<(String, serde_json::Value)>;
 }
 
+impl SerializeMetadata for BamlValueWithMeta<Vec<ResponseCheck>> {
+    fn metadata_fields(&self) -> Vec<(String, serde_json::Value)> {
+        let checks = self.meta();
+        if !checks.is_empty() {
+            let checks_map: HashMap<_,_> = checks.iter().map(|check| (check.name.clone(), check)).collect();
+            let json_checks_map = serde_json::to_value(checks_map).expect("serialization of checks is safe");
+            vec![("checks".to_string(), json_checks_map)]
+        } else {
+            Vec::new()
+        }
+    }
+}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum CompletionState {
+    Pending,
     Incomplete,
     Complete,
 }
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -858,7 +879,7 @@ mod tests {
                 }
             }
         });
-        let json = serde_json::to_value(baml_value).unwrap();
+        let json = serde_json::to_value::<BamlValueWithMeta<Vec<ResponseCheck>>>(baml_value).unwrap();
         assert_eq!(json, expected);
     }
 
@@ -884,7 +905,7 @@ mod tests {
         );
 
         // Prepare the top-level value.
-        let baml_value = BamlValueWithMeta::Class(
+        let baml_value: BamlValueWithMeta<Vec<ResponseCheck>> = BamlValueWithMeta::Class(
             "FooWrapper".to_string(),
             vec![("foo".to_string(), foo)].into_iter().collect(),
             vec![],
@@ -901,7 +922,7 @@ mod tests {
                 }
             }
         });
-        let json = serde_json::to_value(baml_value).unwrap();
+        let json = serde_json::to_value::<BamlValueWithMeta<Vec<ResponseCheck>>>(baml_value).unwrap();
         assert_eq!(json, expected);
     }
 }

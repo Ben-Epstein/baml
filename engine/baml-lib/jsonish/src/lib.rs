@@ -6,7 +6,7 @@ pub mod deserializer;
 mod jsonish;
 use std::collections::HashMap;
 
-use baml_types::{BamlValue, BamlValueWithMeta, FieldType, ResponseCheck, JinjaExpression};
+use baml_types::{BamlValue, BamlValueWithMeta, FieldType, ResponseCheck, JinjaExpression, SerializeMetadata};
 use deserializer::coercer::{ParsingContext, TypeCoercer};
 
 pub use deserializer::types::BamlValueWithFlags;
@@ -21,6 +21,12 @@ use jsonish::Value;
 
 #[derive(Clone, Debug)]
 pub struct ResponseBamlValue(pub BamlValueWithMeta<(Vec<Flag>, Vec<ResponseCheck>, Option<CompletionState>)>);
+
+impl serde::Serialize for ResponseBamlValue {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
 
 pub fn from_str(
     of: &OutputFormatContent,
@@ -91,5 +97,22 @@ impl From<ResponseBamlValue> for BamlValue {
 impl WithScore for ResponseBamlValue {
     fn score(&self) -> i32 {
         self.0.iter().map(|node| node.meta().0.score()).sum()
+    }
+}
+
+impl SerializeMetadata for ResponseBamlValue {
+    fn metadata_fields(&self) -> Vec<(String, serde_json::Value)> {
+        let mut fields = Vec::new();
+        let checks: Vec<(&str, &ResponseCheck)> = self.0.meta().1.iter().map(|check| (check.name.as_str(), check)).collect();
+        if !checks.is_empty() {
+            let checks_json = serde_json::to_value(checks).expect("Serializing checks is safe.");
+            fields.push(("checks".to_string(), checks_json));
+        }
+        let completion_state: Option<&CompletionState> = self.0.meta().2.as_ref();
+        if let Some(state) = completion_state {
+            let completion_state_json = serde_json::to_value(&state).expect("Serializing completion state is safe.");
+            fields.push(("completion_state".to_string(), completion_state_json));
+        }
+        fields
     }
 }

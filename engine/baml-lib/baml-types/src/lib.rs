@@ -8,7 +8,7 @@ mod field_type;
 mod generator;
 mod value_expr;
 
-pub use baml_value::{BamlValue, BamlValueWithMeta, CompletionState};
+pub use baml_value::{BamlValue, BamlValueWithMeta, CompletionState, SerializeMetadata};
 pub use constraint::*;
 pub use field_type::{FieldType, LiteralValue, StreamingBehavior, TypeValue};
 pub use generator::{GeneratorDefaultClientMode, GeneratorOutputType};

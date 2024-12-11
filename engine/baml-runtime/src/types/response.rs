@@ -37,7 +37,7 @@ impl std::fmt::Display for FunctionResult {
                     "{}",
                     format!("---Parsed Response ({})---", val.0.r#type()).blue()
                 )?;
-                write!(f, "{:#}", serde_json::json!(val.0))
+                write!(f, "{:#}", serde_json::json!(val))
             }
             Some(Err(e)) => {
                 writeln!(f, "{}", "---Parsed Response---".blue())?;

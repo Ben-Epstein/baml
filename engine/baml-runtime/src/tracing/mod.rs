@@ -507,7 +507,7 @@ impl BamlTracer {
                     .result_with_constraints()
                     .as_ref()
                     .and_then(|r| r.as_ref().ok())
-                    .map(|v| serde_json::to_string(&v.0).unwrap_or_default()),
+                    .map(|v| serde_json::to_string(&v).unwrap_or_default()),
                 error,
             },
             LLMResponse::LLMFailure(err) => BamlEventJson {
