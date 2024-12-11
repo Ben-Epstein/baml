@@ -236,7 +236,8 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jsonish::{CompletionState, Value};
+    use crate::jsonish::Value;
+    use baml_types::CompletionState;
 
     fn to_any_of(inner: Value, s: &str) -> Value {
         Value::AnyOf(vec![inner], s.to_string())

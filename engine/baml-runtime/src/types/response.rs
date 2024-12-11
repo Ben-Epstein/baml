@@ -35,9 +35,9 @@ impl std::fmt::Display for FunctionResult {
                 writeln!(
                     f,
                     "{}",
-                    format!("---Parsed Response ({})---", val.r#type()).blue()
+                    format!("---Parsed Response ({})---", val.0.r#type()).blue()
                 )?;
-                write!(f, "{:#}", serde_json::json!(val))
+                write!(f, "{:#}", serde_json::json!(val.0))
             }
             Some(Err(e)) => {
                 writeln!(f, "{}", "---Parsed Response---".blue())?;
@@ -95,41 +95,47 @@ impl FunctionResult {
         &self.event_chain.last().unwrap().0
     }
 
-    pub fn parsed(&self) -> &Option<Result<BamlValueWithMeta<Vec<Flag>>>> {
-        &self.event_chain.last().unwrap().2
-    }
-
-    /// Get the parsed result. This logic is strange because parsing errors can
-    /// be forwarded to a different field in the orchestrator.
-    /// TODO: (Greg) Fix the strange logic.
-    /// Historical note: Most of the consumers of the orchestrator use a final
-    /// `ResponseBamlValue`, a type designed to hold only the information needed
-    /// in those responses. But one consumer, the wasm client, requires extra info
-    /// from the parsing stage. Therefore we preserve both the parsing stage data
-    /// and the `ResponseValue` side by side. And because `anyhow::Error` is not
-    /// `Clone`, errors from the parsing stage are handled the most easily by
-    /// migrating them to the `ResponseValue` in cases where parsing failed.
-    /// The proper solution is to create a `RuntimeBamlValue` that contains
-    /// enough information for all clients, and then types like
-    /// `SDKClientResponseBamlValue` and `WasmResponseBamlValue` which derive
-    /// from `RuntimeBamlValue` where needed.
-    pub fn parsed_content(&self) -> Result<&BamlValueWithFlags> {
-        match (self.parsed(), self.result_with_constraints()) {
-            // Error at parse time was forwarded to later result.
-            (None, Some(Err(e))) => Err(self.format_err(e)),
-            // Parsing succeeded.
-            (Some(Ok(v)), _) => Ok(v),
-            // Error at parse time was not forwarded to later results.
-            (Some(Err(e)), _) => Err(self.format_err(e)),
-            (None, None) => Err(anyhow::anyhow!(self.llm_response().clone())),
-            (None, Some(_)) => {
-                unreachable!("A response could not have been created without a successful parse")
-            }
+    pub fn parsed(&self) -> &Option<Result<ResponseBamlValue>> {
+        match self.event_chain.last() {
+            Some((_,_,result)) => result,
+            None => &None,
         }
     }
 
+    // /// Get the parsed result. This logic is strange because parsing errors can
+    // /// be forwarded to a different field in the orchestrator.
+    // /// TODO: (Greg) Fix the strange logic.
+    // /// Historical note: Most of the consumers of the orchestrator use a final
+    // /// `ResponseBamlValue`, a type designed to hold only the information needed
+    // /// in those responses. But one consumer, the wasm client, requires extra info
+    // /// from the parsing stage. Therefore we preserve both the parsing stage data
+    // /// and the `ResponseValue` side by side. And because `anyhow::Error` is not
+    // /// `Clone`, errors from the parsing stage are handled the most easily by
+    // /// migrating them to the `ResponseValue` in cases where parsing failed.
+    // /// The proper solution is to create a `RuntimeBamlValue` that contains
+    // /// enough information for all clients, and then types like
+    // /// `SDKClientResponseBamlValue` and `WasmResponseBamlValue` which derive
+    // /// from `RuntimeBamlValue` where needed.
+    // pub fn parsed_content(&self) -> Result<&BamlValueWithFlags> {
+    //     match (self.parsed(), self.result_with_constraints()) {
+    //         // Error at parse time was forwarded to later result.
+    //         (None, Some(Err(e))) => Err(self.format_err(e)),
+    //         // Parsing succeeded.
+    //         (Some(Ok(v)), _) => Ok(v),
+    //         // Error at parse time was not forwarded to later results.
+    //         (Some(Err(e)), _) => Err(self.format_err(e)),
+    //         (None, None) => Err(anyhow::anyhow!(self.llm_response().clone())),
+    //         (None, Some(_)) => {
+    //             unreachable!("A response could not have been created without a successful parse")
+    //         }
+    //     }
+    // }
+
     pub fn result_with_constraints(&self) -> &Option<Result<ResponseBamlValue>> {
-        &self.event_chain.last().unwrap().3
+        match self.event_chain.last() {
+            Some((_, _, result)) => result,
+            None => &None
+        }
     }
 
     pub fn result_with_constraints_content(&self) -> Result<&ResponseBamlValue> {

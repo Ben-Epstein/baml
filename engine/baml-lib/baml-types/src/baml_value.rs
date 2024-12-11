@@ -779,6 +779,10 @@ fn add_checks<'a, S: SerializeMap>(
     Ok(())
 }
 
+pub trait SerializeMetadata {
+    fn metadata_fields(&self) -> Vec<(String, serde_json::Value)>;
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompletionState {

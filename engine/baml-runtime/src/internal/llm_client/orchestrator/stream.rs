@@ -63,7 +63,7 @@ where
                 .map(|stream_part| {
                     if let Some(on_event) = on_event.as_ref() {
                         if let LLMResponse::Success(s) = &stream_part {
-                            let parsed = partial_parse_fn(&s.content);
+                            let response_value = partial_parse_fn(&s.content);
                             // let response_value = match parsed {
                             //     Ok(v) => {
                             //         (Some(Ok(v.clone())), Some(Ok(parsed_value_to_response(&v))))
@@ -73,7 +73,7 @@ where
                             on_event(FunctionResult::new(
                                 node.scope.clone(),
                                 LLMResponse::Success(s.clone()),
-                                response_value,
+                                Some(response_value),
                             ));
                         }
                     }
