@@ -24,7 +24,7 @@ pub async fn orchestrate(
     ctx: &RuntimeContext,
     prompt: &PromptRenderer,
     params: &BamlValue,
-    parse_fn: impl Fn(&str) -> Result<BamlValueWithFlags>,
+    parse_fn: impl Fn(&str) -> Result<ResponseBamlValue>,
 ) -> (
     Vec<(
         OrchestrationScope,

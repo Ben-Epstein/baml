@@ -2,20 +2,19 @@ pub use crate::internal::llm_client::LLMResponse;
 use crate::{
     test_constraints::TestConstraintsResult,
     errors::ExposedError,
-    internal::llm_client::{orchestrator::OrchestrationScope, ResponseBamlValue},
+    internal::llm_client::orchestrator::OrchestrationScope,
 };
 use anyhow::Result;
 use colored::*;
 
-use baml_types::BamlValue;
-use jsonish::BamlValueWithFlags;
+use baml_types::{BamlValue, BamlValueWithMeta};
+use jsonish::{deserializer::deserialize_flags::Flag, BamlValueWithFlags, ResponseBamlValue};
 
 #[derive(Debug)]
 pub struct FunctionResult {
     event_chain: Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<BamlValueWithFlags>>,
         Option<Result<ResponseBamlValue>>,
     )>,
 }
@@ -53,11 +52,10 @@ impl FunctionResult {
     pub fn new(
         scope: OrchestrationScope,
         response: LLMResponse,
-        parsed: Option<Result<BamlValueWithFlags>>,
         baml_value: Option<Result<ResponseBamlValue>>,
     ) -> Self {
         Self {
-            event_chain: vec![(scope, response, parsed, baml_value)],
+            event_chain: vec![(scope, response, baml_value)],
         }
     }
 
@@ -66,7 +64,6 @@ impl FunctionResult {
     ) -> &Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<BamlValueWithFlags>>,
         Option<Result<ResponseBamlValue>>,
     )> {
         &self.event_chain
@@ -76,7 +73,6 @@ impl FunctionResult {
         chain: Vec<(
             OrchestrationScope,
             LLMResponse,
-            Option<Result<BamlValueWithFlags>>,
             Option<Result<ResponseBamlValue>>,
         )>,
     ) -> Result<Self> {
@@ -99,7 +95,7 @@ impl FunctionResult {
         &self.event_chain.last().unwrap().0
     }
 
-    pub fn parsed(&self) -> &Option<Result<BamlValueWithFlags>> {
+    pub fn parsed(&self) -> &Option<Result<BamlValueWithMeta<Vec<Flag>>>> {
         &self.event_chain.last().unwrap().2
     }
 

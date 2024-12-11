@@ -1,8 +1,8 @@
 use baml_types::BamlMap;
 use bstd::dedent;
 
+use baml_types::CompletionState;
 use crate::jsonish::Value;
-use crate::jsonish::value::CompletionState;
 
 #[derive(Debug)]
 pub enum JsonCollection {

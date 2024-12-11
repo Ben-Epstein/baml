@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{BamlMediaType};
+use baml_types::{BamlMediaType, CompletionState};
 use internal_baml_core::ir::{FieldType, TypeValue};
 
 use crate::deserializer::{
@@ -7,7 +7,6 @@ use crate::deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
-use crate::jsonish::CompletionState;
 use regex::Regex;
 
 use super::{array_helper::coerce_array_to_singular, ParsingContext, ParsingError};

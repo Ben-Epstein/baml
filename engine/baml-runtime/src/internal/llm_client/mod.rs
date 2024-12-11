@@ -9,13 +9,16 @@ pub mod retry_policy;
 mod strategy;
 pub mod traits;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
-use baml_types::{BamlMap, BamlValueWithMeta, JinjaExpression, ResponseCheck};
-use internal_baml_core::ir::ClientWalker;
+use baml_types::{BamlMap, BamlValueWithMeta, FieldType, JinjaExpression, ResponseCheck};
+use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::AllowedRoleMetadata;
-use jsonish::{BamlValueWithFlags, ResponseBamlValue};
+use jsonish::{
+    deserializer::{deserialize_flags::Flag, semantic_streaming::validate_streaming_state},
+    BamlValueWithFlags, ResponseBamlValue,
+};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
@@ -25,12 +28,16 @@ use reqwest::StatusCode;
 use wasm_bindgen::JsValue;
 
 /// Validate a parsed value, checking asserts and checks.
-pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> ResponseBamlValue {
-
+pub fn parsed_value_to_response(
+    ir: &IntermediateRepr,
+    baml_value: &BamlValueWithFlags,
+    field_type: &FieldType,
+) -> Result<ResponseBamlValue> {
+    let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
         baml_value.clone().into();
 
-    let value_with_response_checks = baml_value_with_meta.map_meta(|cs| {
+    let value_with_response_checks: BamlValueWithMeta<Vec<ResponseCheck>> = baml_value_with_meta.map_meta(|cs| {
         cs.iter()
             .map(|(label, expr, result)| {
                 let status = (if *result { "succeeded" } else { "failed" }).to_string();
@@ -43,8 +50,15 @@ pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> ResponseBaml
             .collect()
     });
 
-    let response_value = validate_streaming_state();
-    response_value
+    let baml_value_with_streaming =
+        validate_streaming_state(ir, &baml_value, field_type).map_err(|s| anyhow::anyhow!("TODO"))?;
+    let response_value = meta_flags
+        .zip_meta(value_with_response_checks)
+        .ok_or(anyhow::anyhow!("TODO"))?
+        .zip_meta(baml_value_with_streaming)
+        .ok_or(anyhow::anyhow!("TODO"))?
+        .map_meta(|((x, y), z)| (x.clone(), y.clone(), z.clone()));
+    Ok(ResponseBamlValue(response_value))
 }
 
 #[derive(Clone, Copy, PartialEq)]

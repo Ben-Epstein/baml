@@ -4,6 +4,7 @@ mod tests;
 use anyhow::Result;
 pub mod deserializer;
 mod jsonish;
+use std::collections::HashMap;
 
 use baml_types::{BamlValue, BamlValueWithMeta, FieldType, ResponseCheck, JinjaExpression};
 use deserializer::coercer::{ParsingContext, TypeCoercer};
@@ -12,9 +13,11 @@ pub use deserializer::types::BamlValueWithFlags;
 use internal_baml_core::ir::TypeValue;
 use internal_baml_jinja::types::OutputFormatContent;
 
+use baml_types::CompletionState;
 use deserializer::deserialize_flags::Flag;
+use serde::{Serialize, Serializer, ser::SerializeMap};
 use crate::deserializer::score::WithScore;
-use jsonish::{CompletionState, Value};
+use jsonish::Value;
 
 #[derive(Clone, Debug)]
 pub struct ResponseBamlValue(pub BamlValueWithMeta<(Vec<Flag>, Vec<ResponseCheck>, Option<CompletionState>)>);
@@ -26,7 +29,7 @@ pub fn from_str(
     allow_partials: bool,
 ) -> Result<BamlValueWithFlags> {
     if matches!(target, FieldType::Primitive(TypeValue::String)) {
-        return Ok(ResponseBamlValue(BamlValueWithMeta::String(raw_string.to_string().into(), (Vec::new(), Vec::new(), None))));
+        return Ok(BamlValueWithFlags::String(raw_string.to_string().into()));
     }
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.

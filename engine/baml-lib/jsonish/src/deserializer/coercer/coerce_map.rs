@@ -7,9 +7,9 @@ use crate::{
         deserialize_flags::{DeserializerConditions, Flag},
         types::BamlValueWithFlags,
     },
-    jsonish::{self, CompletionState},
+    jsonish,
 };
-use baml_types::{BamlMap, FieldType, LiteralValue, TypeValue};
+use baml_types::{BamlMap, CompletionState, FieldType, LiteralValue, TypeValue};
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 

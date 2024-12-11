@@ -1,10 +1,12 @@
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;
 
+use baml_types::CompletionState;
+
 use crate::{deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
-}, jsonish::CompletionState};
+}};
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 

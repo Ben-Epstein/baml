@@ -6,9 +6,10 @@ use crate::jsonish::{
         markdown_parser::{self, MarkdownResult},
         multi_json_parser,
     },
-    value::{CompletionState, Fixes},
+    value::Fixes,
     Value,
 };
+use baml_types::CompletionState;
 
 use super::ParseOptions;
 

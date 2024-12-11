@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{BamlMap, Constraint, ConstraintLevel};
+use baml_types::{BamlMap, CompletionState, Constraint, ConstraintLevel};
 use internal_baml_core::{ir::FieldType, ir::TypeValue};
 
 use crate::deserializer::{
@@ -13,7 +13,6 @@ use super::{
     coerce_optional::coerce_optional, coerce_union::coerce_union, ir_ref::IrRef, ParsingContext,
     ParsingError,
 };
-use crate::jsonish::CompletionState;
 
 impl TypeCoercer for FieldType {
     fn coerce(

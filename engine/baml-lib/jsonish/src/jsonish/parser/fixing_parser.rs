@@ -1,7 +1,8 @@
 mod json_collection;
 mod json_parse_state;
 
-use crate::jsonish::{value::{CompletionState, Fixes}, Value};
+use baml_types::CompletionState;
+use crate::jsonish::{value::Fixes, Value};
 
 use self::json_parse_state::JsonParseState;
 

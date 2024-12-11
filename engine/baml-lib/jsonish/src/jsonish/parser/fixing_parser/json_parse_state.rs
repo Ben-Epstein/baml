@@ -1,6 +1,7 @@
 use std::iter::Peekable;
 
-use crate::jsonish::{value::{CompletionState, Fixes}, Value};
+use crate::jsonish::{value::Fixes, Value};
+use baml_types::CompletionState;
 use anyhow::Result;
 
 use super::json_collection::JsonCollection;

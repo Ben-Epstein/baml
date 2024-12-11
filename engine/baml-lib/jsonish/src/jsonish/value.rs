@@ -3,7 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use baml_types::BamlMap;
+use baml_types::{BamlMap, CompletionState};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fixes {
@@ -68,11 +68,6 @@ impl Hash for Value {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CompletionState {
-    Incomplete,
-    Complete,
-}
 
 impl Value {
     pub fn r#type(&self) -> String {
