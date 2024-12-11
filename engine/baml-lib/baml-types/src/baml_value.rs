@@ -701,51 +701,51 @@ impl<T> From<BamlValueWithMeta<T>> for BamlValue {
 //     }
 // }
 
-impl <T> Serialize for BamlValueWithMeta<(T, Vec<ResponseCheck>, Option<CompletionState>)> {
+impl <T, M> Serialize for BamlValueWithMeta<M> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
+        M: SerializeMetadata,
     {
         match self {
-           BamlValueWithMeta::String(v, (_flags, cr, st)) => serialize_with_checks(v, cr.as_slice(), st, serializer),
-           BamlValueWithMeta::Int(v, (_flags, cr, st)) => serialize_with_checks(v, cr.as_slice(), st, serializer),
-           BamlValueWithMeta::Float(v, (_flags, cr, st)) => serialize_with_checks(v, cr.as_slice(), st, serializer),
-           BamlValueWithMeta::Bool(v, (_flags, cr, st)) => serialize_with_checks(v, cr.as_slice(), st, serializer),
-           BamlValueWithMeta::Map(v, (_flags, cr, st)) => {
+           BamlValueWithMeta::String(v, metadata) => serialize_with_checks(v, metadata, serializer),
+           BamlValueWithMeta::Int(v, metadata) => serialize_with_checks(v, metadata, serializer),
+           BamlValueWithMeta::Float(v, metadata) => serialize_with_checks(v, metadata, serializer),
+           BamlValueWithMeta::Bool(v, metadata) => serialize_with_checks(v, metadata, serializer),
+           BamlValueWithMeta::Map(v, metadata) => {
                let mut map = serializer.serialize_map(None)?;
                for (key, value) in v {
                    map.serialize_entry(key, value)?;
                }
-               add_checks(&mut map, cr.as_slice(), st)?;
+               add_checks(&mut map, metadata)?;
                map.end()
            }
-           BamlValueWithMeta::List(v, (_flags, cr, st)) => serialize_with_checks(v, cr.as_slice(), st, serializer),
-           BamlValueWithMeta::Media(v, (_flags, cr, st)) => serialize_with_checks(v, cr.as_slice(), st, serializer),
-           BamlValueWithMeta::Enum(_enum_name, v, (_flags, cr, st)) => serialize_with_checks(v, cr.as_slice(), st, serializer),
-           BamlValueWithMeta::Class(_class_name, v, (_flags, cr, st)) => {
+           BamlValueWithMeta::List(v, metadata) => serialize_with_checks(v, metadata, serializer),
+           BamlValueWithMeta::Media(v, metadata) => serialize_with_checks(v, metadata, serializer),
+           BamlValueWithMeta::Enum(_enum_name, v, metadata) => serialize_with_checks(v, metadata, serializer),
+           BamlValueWithMeta::Class(_class_name, v, metadata) => {
                if cr.is_empty() {
                    let mut map = serializer.serialize_map(None)?;
                    for (key, value) in v {
                        map.serialize_entry(key, value)?;
                    }
-                   add_checks(&mut map, cr, st)?;
+                   add_checks(&mut map, metadata)?;
                    map.end()
                } else {
                    let mut checked_value = serializer.serialize_map(Some(2))?;
                    checked_value.serialize_entry("value", &v)?;
-                   add_checks(&mut checked_value, cr, st)?;
+                   add_checks(&mut checked_value, metadata)?;
                    checked_value.end()
                }
            }
-           BamlValueWithMeta::Null((_flags, cr, st)) => serialize_with_checks(&(), cr.as_slice(), st, serializer),
+           BamlValueWithMeta::Null(metadata) => serialize_with_checks(&(), metadata, serializer),
        }
     }
 }
 
-fn serialize_with_checks<S, T: Serialize>(
+fn serialize_with_checks<S, T: Serialize, M: SerializeMetadata>(
     value: &T,
-    checks: &[ResponseCheck],
-    completion_state: &Option<CompletionState>,
+    metadata: M,
     serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
@@ -754,28 +754,30 @@ where
     if !(checks.is_empty() && completion_state.is_none()) {
         let mut map = serializer.serialize_map(Some(2))?;
         map.serialize_entry("value", value)?;
-        add_checks(&mut map, checks, completion_state)?;
+        add_checks(&mut map, metadata)?;
         map.end()
     } else {
         value.serialize(serializer)
     }
 }
 
-fn add_checks<'a, S: SerializeMap>(
+fn add_checks<'a, S: SerializeMap, M: SerializeMetadata>(
     map: &'a mut S,
-    checks: &'a [ResponseCheck],
-    completion_state: &Option<CompletionState>,
+    metadata: M,
 ) -> Result<(), S::Error> {
-    if !checks.is_empty() {
-        let checks_map: HashMap<_, _> = checks
-            .iter()
-            .map(|check| (check.name.clone(), check))
-            .collect();
-        map.serialize_entry("checks", &checks_map)?;
-    }
-    if let Some(state) = completion_state {
-        map.serialize_entry("complete", &(state == &CompletionState::Complete))?;
-    }
+    metadata.metadata_fields().iter().try_for_each(|(field_name, value)| {
+        map.serialize_entry(&field_name, &value)
+    })?;
+    // if !checks.is_empty() {
+    //     let checks_map: HashMap<_, _> = checks
+    //         .iter()
+    //         .map(|check| (check.name.clone(), check))
+    //         .collect();
+    //     map.serialize_entry("checks", &checks_map)?;
+    // }
+    // if let Some(state) = completion_state {
+    //     map.serialize_entry("complete", &(state == &CompletionState::Complete))?;
+    // }
     Ok(())
 }
 
