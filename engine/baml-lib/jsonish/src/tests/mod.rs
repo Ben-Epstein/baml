@@ -1,6 +1,3 @@
-use anyhow::Result;
-use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
-
 #[macro_use]
 pub mod macros;
 
@@ -15,6 +12,7 @@ mod test_literals;
 mod test_maps;
 mod test_partials;
 mod test_unions;
+mod test_streaming;
 
 use indexmap::IndexSet;
 use std::{
@@ -22,10 +20,18 @@ use std::{
     path::PathBuf,
 };
 
-use baml_types::{BamlValue, EvaluationContext, StreamingBehavior};
+use anyhow::Result;
+use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
+use internal_baml_core::ir::repr::IntermediateRepr;
+use baml_types::{BamlValue, EvaluationContext, StreamingBehavior, BamlValueWithMeta, CompletionState, FieldType, JinjaExpression, ResponseCheck};
+use crate::deserializer::semantic_streaming::validate_streaming_state;
+use crate::{ResponseBamlValue, BamlValueWithFlags};
+use crate::deserializer::deserialize_flags::Flag;
+
+use baml_types::{};
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType, IRHelper, TypeValue},
+    ir::{ClassWalker, EnumWalker, IRHelper, TypeValue},
     validate,
 };
 use serde_json::json;
@@ -70,6 +76,7 @@ fn find_existing_class_field(
     class_walker: &Result<ClassWalker<'_>>,
     env_values: &EvaluationContext<'_>,
 ) -> Result<(Name, FieldType, Option<String>, bool)> {
+    eprintln!("find_existing_class_field {class_name}, {field_name}:");
     let Ok(class_walker) = class_walker else {
         anyhow::bail!("Class {} does not exist", class_name);
     };
@@ -82,6 +89,8 @@ fn find_existing_class_field(
     let desc = field_walker.description(env_values)?;
     let r#type = field_walker.r#type();
     let streaming_needed = field_walker.item.attributes.get("streaming::needed").is_some(); // TODO: Check for True.
+    eprintln!("  {name:?}, {type:?} {streaming_needed}");
+    eprintln!("  {:?}", field_walker.item.attributes);
     Ok((name, r#type.clone(), desc, streaming_needed))
 }
 
@@ -242,6 +251,38 @@ fn relevant_data_models<'a>(
     Ok((enums, classes, recursive_classes))
 }
 
+fn parsed_value_to_response(
+    ir: &IntermediateRepr,
+    baml_value: &BamlValueWithFlags,
+    field_type: &FieldType,
+) -> Result<ResponseBamlValue> {
+    let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
+    let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
+        baml_value.clone().into();
+
+    let value_with_response_checks: BamlValueWithMeta<Vec<ResponseCheck>> = baml_value_with_meta.map_meta(|cs| {
+        cs.iter()
+            .map(|(label, expr, result)| {
+                let status = (if *result { "succeeded" } else { "failed" }).to_string();
+                ResponseCheck {
+                    name: label.clone(),
+                    expression: expr.0.clone(),
+                    status,
+                }
+            })
+            .collect()
+    });
+
+    let baml_value_with_streaming =
+        validate_streaming_state(ir, &baml_value, field_type).map_err(|s| anyhow::anyhow!("TODO"))?;
+    let response_value = meta_flags
+        .zip_meta(value_with_response_checks)
+        .ok_or(anyhow::anyhow!("TODO"))?
+        .zip_meta(baml_value_with_streaming)
+        .ok_or(anyhow::anyhow!("TODO"))?
+        .map_meta(|((x, y), z)| (x.clone(), y.clone(), z.clone()));
+    Ok(ResponseBamlValue(response_value))
+}
 const EMPTY_FILE: &str = r#"
 "#;
 

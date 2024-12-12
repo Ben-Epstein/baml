@@ -421,6 +421,7 @@ impl WithRepr<FieldType> for ast::FieldType {
                 })
             })
             .collect::<Vec<Constraint>>();
+        dbg!(&db.ast());
         let mut meta = IndexMap::new();
         if self
             .attributes()
@@ -437,9 +438,13 @@ impl WithRepr<FieldType> for ast::FieldType {
             .find(|Attribute { name, .. }| name.name() == "streaming::state")
             .is_some()
         {
+            eprintln!("GOT STREAMING::STATE");
             let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
             meta.insert("streaming::state".to_string(), val);
+        } else {
+            eprintln!("NOT GOT STREAMING::STATE");
         }
+        dbg!(self.attributes());
         let attributes = NodeAttributes {
             meta,
             constraints,

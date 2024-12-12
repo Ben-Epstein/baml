@@ -11,6 +11,7 @@ use super::helpers::Pair;
 
 pub fn parse_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
     assert_correct_parser!(pair, Rule::identifier);
+    dbg!(&pair);
 
     if let Some(inner) = pair.into_inner().next() {
         return match inner.as_rule() {

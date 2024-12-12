@@ -1,9 +1,3 @@
-use internal_baml_core::ir::repr::IntermediateRepr;
-use baml_types::{BamlValueWithMeta, CompletionState, FieldType, JinjaExpression, ResponseCheck, StreamingBehavior};
-use crate::deserializer::semantic_streaming::validate_streaming_state;
-use crate::{ResponseBamlValue, BamlValueWithFlags};
-use crate::deserializer::deserialize_flags::Flag;
-use anyhow::Result;
 
 macro_rules! test_failing_deserializer {
     ($name:ident, $file_content:expr, $raw_string:expr, $target_type:expr) => {
@@ -119,35 +113,38 @@ macro_rules! test_partial_deserializer {
     };
 }
 
-fn parsed_value_to_response(
-    ir: &IntermediateRepr,
-    baml_value: &BamlValueWithFlags,
-    field_type: &FieldType,
-) -> Result<ResponseBamlValue> {
-    let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
-    let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
-        baml_value.clone().into();
+macro_rules! test_partial_deserializer_streaming {
+    ($name:ident, $file_content:expr, $raw_string:expr, $target_type:expr, $($json:tt)+) => {
+        #[test_log::test]
+        fn $name() {
+            let ir = load_test_ir($file_content);
+            let target = render_output_format(&ir, &$target_type, &Default::default()).unwrap();
 
-    let value_with_response_checks: BamlValueWithMeta<Vec<ResponseCheck>> = baml_value_with_meta.map_meta(|cs| {
-        cs.iter()
-            .map(|(label, expr, result)| {
-                let status = (if *result { "succeeded" } else { "failed" }).to_string();
-                ResponseCheck {
-                    name: label.clone(),
-                    expression: expr.0.clone(),
-                    status,
-                }
-            })
-            .collect()
-    });
+            let parsed = from_str(
+                &target,
+                &$target_type,
+                $raw_string,
+                true,
+            );
 
-    let baml_value_with_streaming =
-        validate_streaming_state(ir, &baml_value, field_type).map_err(|s| anyhow::anyhow!("TODO"))?;
-    let response_value = meta_flags
-        .zip_meta(value_with_response_checks)
-        .ok_or(anyhow::anyhow!("TODO"))?
-        .zip_meta(baml_value_with_streaming)
-        .ok_or(anyhow::anyhow!("TODO"))?
-        .map_meta(|((x, y), z)| (x.clone(), y.clone(), z.clone()));
-    Ok(ResponseBamlValue(response_value))
+            dbg!(&target);
+            dbg!(&$target_type);
+
+            assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
+
+            let result = parsed_value_to_response(&ir, &parsed.unwrap(), &$target_type);
+
+            assert!(result.is_ok(), "Failed to parse: {:?}", result);
+
+            let value = result.unwrap();
+            log::trace!("Score: {}", value.score());
+            let value: BamlValue = value.into();
+            log::info!("{}", value);
+            let json_value = json!(value);
+
+            let expected = serde_json::json!($($json)+);
+
+            assert_json_diff::assert_json_eq!(json_value, expected);
+        }
+    };
 }

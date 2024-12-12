@@ -64,6 +64,7 @@ pub(crate) fn parse_value_expr(
 /// The name of the attribute fully determines whether it will be associated with
 /// the field, or with the type.
 fn reassociate_type_attributes(field_attributes: &mut Vec<Attribute>, field_type: &mut FieldType) {
+    eprintln!("reassociate from field:{field_attributes:?} type:{field_type:?}");
     let mut all_attrs = field_type.attributes().to_owned();
     all_attrs.append(field_attributes);
     let (attrs_for_type, attrs_for_field): (Vec<_>, Vec<_>) = all_attrs
@@ -71,6 +72,7 @@ fn reassociate_type_attributes(field_attributes: &mut Vec<Attribute>, field_type
         .partition(|attr| TYPE_ATTRIBUTE_NAMES.contains(&attr.name()));
     field_type.set_attributes(attrs_for_type.clone());
     *field_attributes = attrs_for_field;
+    eprintln!("reassociate to field:{field_attributes:?} type:{field_type:?}");
 }
 
 const TYPE_ATTRIBUTE_NAMES: [&str; 4] = ["assert", "check", "streaming::done", "streaming::state"];
@@ -83,6 +85,7 @@ pub(crate) fn parse_type_expr(
     diagnostics: &mut Diagnostics,
     _is_enum: bool,
 ) -> Result<Field<FieldType>, DatamodelError> {
+    dbg!(&pair);
     let pair_span = pair.as_span();
     let mut name: Option<Identifier> = None;
     let mut field_attributes = Vec::<Attribute>::new();
@@ -101,7 +104,9 @@ pub(crate) fn parse_type_expr(
                 field_type = parse_field_type_chain(current, diagnostics);
             }
             Rule::field_attribute => {
-                field_attributes.push(parse_attribute(current, false, diagnostics))
+                let attribute = parse_attribute(current, false, diagnostics);
+                dbg!(&attribute);
+                field_attributes.push(attribute);
             }
             _ => parsing_catch_all(current, "field"),
         }
