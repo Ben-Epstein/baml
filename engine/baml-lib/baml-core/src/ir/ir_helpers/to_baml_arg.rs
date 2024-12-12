@@ -399,7 +399,7 @@ fn first_failing_assert_nested<'a>(
 
 #[cfg(test)]
 mod tests {
-    use baml_types::JinjaExpression;
+    use baml_types::{JinjaExpression, StreamingBehavior};
 
     use crate::ir::repr::make_test_ir;
 
@@ -431,6 +431,7 @@ mod tests {
                 expression: JinjaExpression("this.length() > 0".to_string()),
                 label: Some("foo".to_string()),
             }],
+            streaming_behavior: StreamingBehavior::default(),
         };
         let arg_coercer = ArgCoercer {
             span_path: None,
