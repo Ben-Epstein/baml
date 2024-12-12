@@ -239,7 +239,7 @@ impl BamlRuntime {
             )?;
             let (response_res, span_uuid) = stream.run(on_event, ctx, None, None).await;
             let res = response_res?;
-            let (_, llm_resp, _, val) = res
+            let (_, llm_resp, val) = res
                 .event_chain()
                 .iter()
                 .last()
@@ -260,7 +260,8 @@ impl BamlRuntime {
             } else {
                 match val {
                     Some(Ok(value)) => {
-                        evaluate_test_constraints(&params, value, complete_resp, constraints)
+                        let value_with_constraints = value.0.map_meta(|(_,constraints,_)| constraints.clone());
+                        evaluate_test_constraints(&params, &value_with_constraints, complete_resp, constraints)
                     }
                     _ => TestConstraintsResult::empty(),
                 }

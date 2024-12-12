@@ -702,14 +702,14 @@ impl<T> From<BamlValueWithMeta<T>> for BamlValue {
 // }
 
 impl <T> Serialize for BamlValueWithMeta<T>
-  where BamlValueWithMeta<T>: SerializeMetadata,
+  where T: SerializeMetadata,
 {
 
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let metadata_fields = &self.metadata_fields();
+        let metadata_fields = &self.meta().metadata_fields();
         match self {
            BamlValueWithMeta::String(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
            BamlValueWithMeta::Int(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
@@ -720,14 +720,14 @@ impl <T> Serialize for BamlValueWithMeta<T>
                for (key, value) in v {
                    map.serialize_entry::<String, BamlValueWithMeta<T>>(key, value)?;
                }
-               add_checks(&mut map, &self.metadata_fields())?;
+               add_checks(&mut map, &self.meta().metadata_fields())?;
                map.end()
            }
            BamlValueWithMeta::List(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
            BamlValueWithMeta::Media(v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
            BamlValueWithMeta::Enum(_enum_name, v, _metadata) => serialize_with_checks(v, metadata_fields, serializer),
            BamlValueWithMeta::Class(_class_name, v, _metadata) => {
-               let metadata_fields = self.metadata_fields();
+               let metadata_fields = self.meta().metadata_fields();
                if metadata_fields.is_empty() {
                    let mut map = serializer.serialize_map(None)?;
                    for (key, value) in v {
@@ -742,7 +742,7 @@ impl <T> Serialize for BamlValueWithMeta<T>
                    checked_value.end()
                }
            }
-           BamlValueWithMeta::Null(_) => serialize_with_checks(&(), &self.metadata_fields(), serializer),
+           BamlValueWithMeta::Null(_) => serialize_with_checks(&(), &self.meta().metadata_fields(), serializer),
        }
     }
 }
@@ -803,6 +803,34 @@ impl SerializeMetadata for BamlValueWithMeta<Vec<ResponseCheck>> {
     }
 }
 
+impl SerializeMetadata for Vec<ResponseCheck> {
+    fn metadata_fields(&self) -> Vec<(String, serde_json::Value)> {
+        if !self.is_empty() {
+            let checks_map: HashMap<_,_> = self.iter().map(|check| (check.name.clone(), check)).collect();
+            let json_checks_map = serde_json::to_value(checks_map).expect("serialization of checks is safe");
+            vec![("checks".to_string(), json_checks_map)]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl <T> SerializeMetadata for (T, Vec<ResponseCheck>, Option<CompletionState>) {
+    fn metadata_fields(&self) -> Vec<(String, serde_json::Value)> {
+        let mut fields = Vec::new();
+        let checks: Vec<(&str, &ResponseCheck)> = self.1.iter().map(|check| (check.name.as_str(), check)).collect();
+        if !checks.is_empty() {
+            let checks_json = serde_json::to_value(checks).expect("Serializing checks is safe.");
+            fields.push(("checks".to_string(), checks_json));
+        }
+        let completion_state: Option<&CompletionState> = self.2.as_ref();
+        if let Some(state) = completion_state {
+            let completion_state_json = serde_json::to_value(&state).expect("Serializing completion state is safe.");
+            fields.push(("completion_state".to_string(), completion_state_json));
+        }
+        fields
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum CompletionState {

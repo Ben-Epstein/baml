@@ -1,4 +1,5 @@
 use baml_types::{BamlValueWithMeta, ResponseCheck};
+use jsonish::ResponseBamlValue;
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::types::{PyAnyMethods, PyDict, PyModule, PyTuple, PyType};
 use pyo3::{Bound, IntoPy, PyAny, PyObject, Python};
@@ -73,12 +74,12 @@ fn pythonize_checks<'a>(
 
 fn pythonize_strict(
     py: Python<'_>,
-    parsed: BamlValueWithMeta<Vec<ResponseCheck>>,
+    parsed: ResponseBamlValue,
     enum_module: &Bound<'_, PyModule>,
     cls_module: &Bound<'_, PyModule>,
 ) -> PyResult<PyObject> {
-    let meta = parsed.meta().clone();
-    let py_value_without_constraints = match parsed {
+    let meta = parsed.0.meta().clone();
+    let py_value_without_constraints = match parsed.0 {
         BamlValueWithMeta::String(val, _) => PyResult::Ok(val.into_py(py)),
         BamlValueWithMeta::Int(val, _) => Ok(val.into_py(py)),
         BamlValueWithMeta::Float(val, _) => Ok(val.into_py(py)),
@@ -87,7 +88,7 @@ fn pythonize_strict(
             let dict = pyo3::types::PyDict::new_bound(py);
             for (key, value) in index_map {
                 let key = key.into_py(py);
-                let value = pythonize_strict(py, value, enum_module, cls_module)?;
+                let value = pythonize_strict(py, ResponseBamlValue(value), enum_module, cls_module)?;
                 dict.set_item(key, value)?;
             }
             Ok(dict.into())
@@ -95,7 +96,7 @@ fn pythonize_strict(
         BamlValueWithMeta::List(vec, _) => Ok(pyo3::types::PyList::new_bound(
             py,
             vec.into_iter()
-                .map(|v| pythonize_strict(py, v, enum_module, cls_module))
+                .map(|v| pythonize_strict(py, ResponseBamlValue(v), enum_module, cls_module))
                 .collect::<PyResult<Vec<_>>>()?,
         )
         .into()),
@@ -137,7 +138,7 @@ fn pythonize_strict(
             let properties = index_map
                 .into_iter()
                 .map(|(key, value)| {
-                    let value = pythonize_strict(py, value, enum_module, cls_module)?;
+                    let value = pythonize_strict(py, ResponseBamlValue(value), enum_module, cls_module)?;
                     Ok((key.clone(), value))
                 })
                 .collect::<PyResult<Vec<_>>>()?;
@@ -186,11 +187,12 @@ fn pythonize_strict(
         BamlValueWithMeta::Null(_) => Ok(py.None()),
     }?;
 
-    if meta.is_empty() {
+    let (_, checks, completion_state) = meta;
+    if checks.is_empty() && completion_state.is_none() {
         Ok(py_value_without_constraints)
     } else {
         // Generate the Python checks
-        let python_checks = pythonize_checks(py, cls_module, &meta)?;
+        let python_checks = pythonize_checks(py, cls_module, &checks)?;
 
         // Get the type of the original value
         let value_type = py_value_without_constraints.bind(py).get_type();
@@ -200,7 +202,7 @@ fn pythonize_strict(
         let literal = typing.getattr("Literal")?;
 
         // Collect check names as &str and turn them into a Python tuple
-        let check_names: Vec<&str> = meta.iter().map(|check| check.name.as_str()).collect();
+        let check_names: Vec<&str> = checks.iter().map(|check| check.name.as_str()).collect();
         let literal_args = PyTuple::new_bound(py, check_names);
 
         // Call Literal[...] dynamically
@@ -209,7 +211,13 @@ fn pythonize_strict(
         // Prepare the properties dictionary
         let properties_dict = pyo3::types::PyDict::new_bound(py);
         properties_dict.set_item("value", py_value_without_constraints)?;
-        properties_dict.set_item("checks", python_checks)?;
+        if !checks.is_empty() {
+            properties_dict.set_item("checks", python_checks)?;
+        }
+        if let Some(completion_state) = completion_state {
+            let completion_json = serde_json::to_string(&completion_state).expect("Serializing CompletionState is safe.");
+            properties_dict.set_item("completion_state", completion_json)?;
+        }
 
         let class_checked_type_constructor = cls_module.getattr("Checked")?;
 

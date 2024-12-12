@@ -1,4 +1,4 @@
-use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, ResponseCheck};
+use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, CompletionState, ResponseCheck};
 use indexmap::IndexMap;
 use magnus::{
     prelude::*, typed_data::Obj, value::Value, Error, Float, Integer, IntoValue, RArray, RClass,
@@ -10,6 +10,7 @@ use crate::types::{
     self,
     media::{Audio, Image},
 };
+use jsonish::{deserializer::deserialize_flags::Flag, ResponseBamlValue};
 
 struct SerializationError {
     position: Vec<String>,
@@ -57,32 +58,44 @@ impl<'rb> RubyToJson<'rb> {
     pub fn serialize_baml(
         ruby: &Ruby,
         types: RModule,
-        mut from: BamlValueWithMeta<Vec<ResponseCheck>>,
+        from: ResponseBamlValue,
     ) -> crate::Result<Value> {
         // If we encounter a BamlValue node with check results, serialize it as
         // { value: T, checks: K }. To compute `value`, we strip the metadata
         // off the node and pass it back to `serialize_baml`.
-        if !from.meta().is_empty() {
-            let meta = from.meta().clone();
-            let checks = Self::serialize_response_checks(ruby, &meta)?;
+        let (_flags, checks, completion) = from.0.meta();
+        if !checks.is_empty() || completion.is_some() {
+            let checks = Self::serialize_response_checks(ruby, &checks)?;
 
-            *from.meta_mut() = vec![];
-            let serialized_subvalue = Self::serialize_baml(ruby, types, from)?;
+            let mut cleared_from = from.clone();
+            {
+                let meta = cleared_from.0.meta_mut();
+                meta.1.clear();
+                meta.2 = None;
+            }
+            
+            let serialized_subvalue = Self::serialize_baml(ruby, types, cleared_from)?;
 
             let checked_class = ruby.eval::<RClass>("Baml::Checked")?;
             let hash = ruby.hash_new();
             hash.aset(ruby.sym_new("value"), serialized_subvalue)?;
-            hash.aset(ruby.sym_new("checks"), checks)?;
+            if !checks.is_empty() {
+                hash.aset(ruby.sym_new("checks"), checks)?;
+            }
+            if let Some(completion_state) = completion {
+                let completion_json = serde_json::to_string(completion_state).expect("Serializing CompletionState is safe.");
+                hash.aset(ruby.sym_new("completion_state"), completion_json)?;
+            }
             Ok(checked_class.funcall("new", (hash,))?)
         }
         // Otherwise encode it directly.
         else {
-            match from {
+            match from.0 {
                 BamlValueWithMeta::Class(class_name, class_fields, _) => {
                     let hash = ruby.hash_new();
                     for (k, v) in class_fields.into_iter() {
                         let k = ruby.sym_new(k.as_str());
-                        let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                        let v = RubyToJson::serialize_baml(ruby, types, ResponseBamlValue(v))?;
                         hash.aset(k, v)?;
                     }
                     match types.const_get::<_, RClass>(class_name.as_str()) {
@@ -107,7 +120,7 @@ impl<'rb> RubyToJson<'rb> {
                     let hash = ruby.hash_new();
                     for (k, v) in m.into_iter() {
                         let k = ruby.str_new(&k);
-                        let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                        let v = RubyToJson::serialize_baml(ruby, types, ResponseBamlValue(v))?;
                         hash.aset(k, v)?;
                     }
                     Ok(hash.into_value_with(ruby))
@@ -115,7 +128,7 @@ impl<'rb> RubyToJson<'rb> {
                 BamlValueWithMeta::List(l, _) => {
                     let arr = ruby.ary_new();
                     for v in l.into_iter() {
-                        let v = RubyToJson::serialize_baml(ruby, types, v)?;
+                        let v = RubyToJson::serialize_baml(ruby, types, ResponseBamlValue(v))?;
                         arr.push(v)?;
                     }
                     Ok(arr.into_value_with(ruby))
@@ -127,7 +140,7 @@ impl<'rb> RubyToJson<'rb> {
 
     pub fn serialize(ruby: &Ruby, types: RModule, from: Value) -> crate::Result<Value> {
         let json = RubyToJson::convert(from)?;
-        RubyToJson::serialize_baml(ruby, types, BamlValueWithMeta::with_default_meta(&json))
+        RubyToJson::serialize_baml(ruby, types, ResponseBamlValue(BamlValueWithMeta::with_default_meta(&json)))
     }
 
     /// Convert a Ruby object to a JSON object.

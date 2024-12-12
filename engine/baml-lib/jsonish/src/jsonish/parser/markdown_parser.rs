@@ -80,7 +80,7 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
 
 #[cfg(test)]
 mod test {
-    use crate::jsonish::CompletionState;
+    use baml_types::CompletionState;
 
     use super::*;
     use test_log::test;

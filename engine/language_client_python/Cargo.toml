@@ -27,6 +27,7 @@ internal-baml-codegen.workspace = true
 env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
+jsonish = { path = "../baml-lib/jsonish" }
 log.workspace = true
 pyo3 = { version = "0.21.2", default-features = false, features = [
   "abi3-py38",

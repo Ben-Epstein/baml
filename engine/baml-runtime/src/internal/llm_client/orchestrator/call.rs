@@ -29,7 +29,6 @@ pub async fn orchestrate(
     Vec<(
         OrchestrationScope,
         LLMResponse,
-        Option<Result<BamlValueWithFlags>>,
         Option<Result<ResponseBamlValue>>,
     )>,
     Duration,
@@ -45,7 +44,6 @@ pub async fn orchestrate(
                     node.scope,
                     LLMResponse::InternalFailure(e.to_string()),
                     None,
-                    None,
                 ));
                 continue;
             }
@@ -57,22 +55,21 @@ pub async fn orchestrate(
         };
 
         let sleep_duration = node.error_sleep_duration().cloned();
-        let (parsed_response, response_with_constraints) = match parsed_response {
-            Some(Ok(v)) => (Some(Ok(v.clone())), Some(Ok(parsed_value_to_response(&v)))),
-            Some(Err(e)) => (None, Some(Err(e))),
-            None => (None, None),
-        };
+        // let (parsed_response, response_with_constraints) = match parsed_response {
+        //     Some(Ok(v)) => (Some(Ok(v.clone())), Some(Ok(parsed_value_to_response(&v)))),
+        //     Some(Err(e)) => (None, Some(Err(e))),
+        //     None => (None, None),
+        // };
         results.push((
             node.scope,
             response,
             parsed_response,
-            response_with_constraints,
         ));
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _, _)| matches!(r, LLMResponse::Success(_)))
+            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
         {
             break;
         } else if let Some(duration) = sleep_duration {
