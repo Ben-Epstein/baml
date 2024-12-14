@@ -11,7 +11,6 @@ use super::helpers::Pair;
 
 pub fn parse_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
     assert_correct_parser!(pair, Rule::identifier);
-    dbg!(&pair);
 
     if let Some(inner) = pair.into_inner().next() {
         return match inner.as_rule() {
@@ -72,6 +71,23 @@ fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Ident
 /// individually.
 fn parse_namespaced_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Identifier {
     assert_correct_parser!(pair, Rule::namespaced_identifier);
+
+    let raw_str = pair.as_str();
     let span = diagnostics.span(pair.as_span());
-    Identifier::from((pair.as_str(), span))
+    let mut name_parts = Vec::new();
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::single_word => name_parts.push(inner.as_str()),
+            _ => unreachable_rule!(inner, Rule::namespaced_identifier),
+        }
+    }
+
+    assert!(
+        name_parts.len() > 1,
+        "Namespaced identifier must have at least 2 elements. Parts({}) Raw({})",
+        name_parts.join("::"),
+        raw_str
+    );
+
+    Identifier::Local(name_parts.join("::"), span)
 }

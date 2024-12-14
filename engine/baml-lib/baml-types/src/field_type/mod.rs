@@ -179,7 +179,9 @@ impl FieldType {
                 }
             }
             match (self, other) {
-                (FieldType::Primitive(TypeValue::Null), FieldType::Optional(_)) => true,
+                (FieldType::WithMetadata { base, .. }, _) => base.is_subtype_of(other),
+                (_, FieldType::WithMetadata { base, .. }) => self.is_subtype_of(base),
+                (FieldType::Primitive(TypeValue::Null), _) => true,
                 (FieldType::Optional(self_item), FieldType::Optional(other_item)) => {
                     self_item.is_subtype_of(other_item)
                 }
@@ -196,21 +198,6 @@ impl FieldType {
                     other_k.is_subtype_of(self_k) && (**self_v).is_subtype_of(other_v)
                 }
                 (FieldType::Map(_, _), _) => false,
-
-                (
-                    FieldType::WithMetadata {
-                        base: self_base,
-                        constraints: self_cs,
-                        ..
-                    },
-                    FieldType::WithMetadata {
-                        base: other_base,
-                        constraints: other_cs,
-                        ..
-                    },
-                ) => self_base.is_subtype_of(other_base) && self_cs == other_cs,
-                (FieldType::WithMetadata { base, .. }, _) => base.is_subtype_of(other),
-                (_, FieldType::WithMetadata { base, .. }) => self.is_subtype_of(base),
                 (
                     FieldType::Literal(LiteralValue::Bool(_)),
                     FieldType::Primitive(TypeValue::Bool),
@@ -373,4 +360,18 @@ mod tests {
         let x = FieldType::Primitive(TypeValue::Media(BamlMediaType::Audio));
         assert!(x.is_subtype_of(&x));
     }
+    #[test]
+    fn subtype_list_with_metadata() {
+        let list_of_ints = mk_list(mk_int());
+        let list_with_metadata = FieldType::WithMetadata {
+            base: Box::new(mk_list(mk_int())),
+            constraints: vec![],
+            streaming_behavior: StreamingBehavior {
+                done: true,
+                state: true,
+            },
+        };
+        assert!(list_of_ints.is_subtype_of(&list_with_metadata));
+    }
+
 }

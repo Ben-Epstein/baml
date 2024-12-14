@@ -34,7 +34,6 @@ impl JsonParseState {
     /// completed. If it is `CompletionState::Complete`, we also apply
     /// that state to the children of the value being completed.
     pub fn complete_collection(&mut self, completion_state: CompletionState) {
-        eprintln!("complete_collection with {completion_state:?}: {self:?}");
         let (collection, fixes) = match self.collection_stack.pop() {
             Some(collection) => collection,
             None => return,
@@ -46,7 +45,6 @@ impl JsonParseState {
             Some(value) => value,
             None => return,
         };
-        eprintln!("Completing collection {name}: {value:?}");
         if completion_state == CompletionState::Complete {
             value.complete_deeply();
         }
@@ -81,7 +79,6 @@ impl JsonParseState {
     }
 
     fn consume(&mut self, token: char) -> Result<usize> {
-        eprintln!("Consume: {self:?}");
         let Some((last, _)) = self.collection_stack.last_mut() else {
             return Err(anyhow::anyhow!(
                 "No collection to consume token: {:?}",
@@ -399,7 +396,6 @@ impl JsonParseState {
                     match token {
                         '}' => {
                             // We're ready to close the object
-                            eprintln!("close object");
                             self.complete_collection(CompletionState::Complete);
                             Ok(0)
                         }
@@ -417,7 +413,6 @@ impl JsonParseState {
                     match token {
                         ']' => {
                             // We're ready to close the array
-                            eprintln!("close array");
                             self.complete_collection(CompletionState::Complete);
                             Ok(0)
                         }
@@ -440,7 +435,6 @@ impl JsonParseState {
                         };
 
                         if is_triple_quoted {
-                            eprintln!("close tripplequoted");
                             self.complete_collection(CompletionState::Complete);
                             Ok(3)
                         } else {
@@ -459,7 +453,6 @@ impl JsonParseState {
                             // It's possible that the LLM messed up the escaping
                             // We'll try to fix it.
                             if self.should_close_string(next, '"') {
-                                eprintln!("close quoted");
                                 self.complete_collection(CompletionState::Complete);
                                 Ok(0)
                             } else {
@@ -551,7 +544,6 @@ impl JsonParseState {
                     match token {
                         '`' => {
                             if self.should_close_string(next, '`') {
-                                eprintln!("close backtick");
                                 self.complete_collection(CompletionState::Complete);
                                 Ok(0)
                             } else {
@@ -571,7 +563,6 @@ impl JsonParseState {
                             // It's possible that the LLM messed up the escaping
                             // We'll try to fix it.
                             if self.should_close_string(next, '\'') {
-                                eprintln!("close comment");
                                 self.complete_collection(CompletionState::Complete);
                                 Ok(0)
                             } else {
@@ -587,7 +578,6 @@ impl JsonParseState {
                     // - A character
                     let res = self.consume(token);
                     if let CloseStringResult::Close(count, completion) = self.should_close_unescaped_string(next) {
-                        eprintln!("close unquotedstring");
                         self.complete_collection(completion);
                         Ok(count)
                     } else {
@@ -601,7 +591,6 @@ impl JsonParseState {
                     match token {
                         '\n' => {
                             // We're ready to close the comment
-                            eprintln!("close comment because newline");
                             self.complete_collection(CompletionState::Complete);
                             Ok(0)
                         }
@@ -618,7 +607,6 @@ impl JsonParseState {
                             match next.peek() {
                                 Some((_, '/')) => {
                                     // We're ready to close the comment
-                                    eprintln!("close comment because slash");
                                     self.complete_collection(CompletionState::Complete);
                                     Ok(1)
                                 }
@@ -744,7 +732,6 @@ impl JsonParseState {
                 self.collection_stack
                     .push((JsonCollection::UnquotedString(x.into(), CompletionState::Incomplete), Default::default()));
                 if let CloseStringResult::Close(count, completion) = self.should_close_unescaped_string(next) {
-                    eprintln!("should_close_unescaped_string");
                     self.complete_collection(completion);
                     return Ok(count);
                 }

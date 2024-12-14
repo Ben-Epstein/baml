@@ -12,6 +12,7 @@ use baml_types::{BamlValueWithMeta, CompletionState, FieldType, ResponseCheck, S
 
 use std::collections::HashSet;
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum StreamingError {
     ExpectedClass,
     IncompleteDoneValue,
@@ -48,7 +49,15 @@ fn process_node(
     let (completion_state, field_type) = value.meta();
     let (base_type, (_, streaming_behavior)) = ir.distribute_metadata(field_type);
 
-    if required_done(ir, base_type) && !(completion_state == &CompletionState::Complete) {
+    let must_be_done = required_done(ir, field_type);
+
+    eprintln!("Working on {value:?}");
+    eprintln!("  completion: {completion_state:?}");
+    eprintln!("  field_type: {field_type:?}");
+    eprintln!("  mustbedone: {}", must_be_done);
+
+    if must_be_done && !(completion_state == &CompletionState::Complete) {
+        eprintln!("  Aborting because incomplete");
         return Err(StreamingError::IncompleteDoneValue);
     }
 
@@ -57,6 +66,7 @@ fn process_node(
     } else {
         None
     };
+    eprintln!("  new_meta: {:?}", new_meta);
 
     let new_value = match value {
         BamlValueWithMeta::String(s, _) => Ok(BamlValueWithMeta::String(s, new_meta)),
@@ -91,6 +101,7 @@ fn process_node(
         }
     };
 
+    eprintln!("  new_value: {new_value:?}");
     // let mut value_meta = new_value.meta_mut();
     // *value_meta = new_meta;
     new_value
@@ -150,7 +161,11 @@ fn required_done(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
             unreachable!("distribute_metadata always consumes `WithMetadata`.")
         }
     };
-    type_implies_done || streaming_behavior.done
+    eprintln!("  type_implies_done: {type_implies_done:?}");
+    eprintln!("  streaming_has_done: {:?}", streaming_behavior.done);
+    let res = type_implies_done || streaming_behavior.done;
+    eprintln!("  res: {:?}", res);
+    res
 }
 
 fn completion_state(flags: &Vec<Flag>) -> CompletionState {

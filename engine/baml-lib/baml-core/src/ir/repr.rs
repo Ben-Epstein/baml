@@ -421,7 +421,6 @@ impl WithRepr<FieldType> for ast::FieldType {
                 })
             })
             .collect::<Vec<Constraint>>();
-        dbg!(&db.ast());
         let mut meta = IndexMap::new();
         if self
             .attributes()
@@ -438,13 +437,9 @@ impl WithRepr<FieldType> for ast::FieldType {
             .find(|Attribute { name, .. }| name.name() == "streaming::state")
             .is_some()
         {
-            eprintln!("GOT STREAMING::STATE");
             let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
             meta.insert("streaming::state".to_string(), val);
-        } else {
-            eprintln!("NOT GOT STREAMING::STATE");
         }
-        dbg!(self.attributes());
         let attributes = NodeAttributes {
             meta,
             constraints,
@@ -458,6 +453,7 @@ impl WithRepr<FieldType> for ast::FieldType {
         let attributes = WithRepr::attributes(self, db);
         let has_constraints = !attributes.constraints.is_empty();
         let streaming_behavior = attributes.streaming_behavior();
+        let has_special_streaming_behavior = streaming_behavior != StreamingBehavior::default();
         let base = match self {
             ast::FieldType::Primitive(arity, typeval, ..) => {
                 let repr = FieldType::Primitive(*typeval);
@@ -550,7 +546,9 @@ impl WithRepr<FieldType> for ast::FieldType {
             ),
         };
 
-        let with_constraints = if has_constraints {
+
+        let use_metadata = has_constraints || has_special_streaming_behavior;
+        let with_constraints = if use_metadata {
             FieldType::WithMetadata {
                 base: Box::new(base.clone()),
                 constraints: attributes.constraints,

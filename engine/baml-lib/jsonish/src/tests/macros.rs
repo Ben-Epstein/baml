@@ -138,13 +138,41 @@ macro_rules! test_partial_deserializer_streaming {
 
             let value = result.unwrap();
             log::trace!("Score: {}", value.score());
-            let value: BamlValue = value.into();
-            log::info!("{}", value);
             let json_value = json!(value);
 
             let expected = serde_json::json!($($json)+);
 
             assert_json_diff::assert_json_eq!(json_value, expected);
+        }
+    };
+}
+
+macro_rules! test_partial_deserializer_streaming_failure {
+    ($name:ident, $file_content:expr, $raw_string:expr, $target_type:expr) => {
+        #[test_log::test]
+        fn $name() {
+            let ir = load_test_ir($file_content);
+            let target = render_output_format(&ir, &$target_type, &Default::default()).unwrap();
+
+            let parsed = from_str(
+                &target,
+                &$target_type,
+                $raw_string,
+                true,
+            );
+
+            dbg!(&target);
+            dbg!(&$target_type);
+
+            assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
+
+            let result = parsed_value_to_response(&ir, &parsed.unwrap(), &$target_type);
+
+            assert!(
+                result.is_err(),
+                "Failed not to parse: {:?}",
+                result.unwrap()
+            );
         }
     };
 }

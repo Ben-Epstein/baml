@@ -9,8 +9,6 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
     let mut json_str_start = None;
     let mut json_objects = Vec::new();
 
-    eprintln!("multi_json parse(\"{str}\")");
-
     for (index, character) in str.char_indices() {
         match character {
             '{' | '[' => {
@@ -41,7 +39,6 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
                         options.next_from_mode(super::ParsingMode::AllJsonObjects),
                     ) {
                         Ok(json) => {
-                            eprintln!("multi_json got entry: {json:?}");
                             json_objects.push(json)
                         },
                         Err(e) => {
@@ -55,23 +52,17 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
         }
     }
 
-    dbg!(&stack);
-
     if !stack.is_empty() {
         // We reached the end but the stack is not empty
         match json_str_start {
             Some(start) => {
                 let json_str = &str[start..];
-                eprintln!("about to entry::parse({json_str:?})");
                 match entry::parse(
                     json_str,
                     options.next_from_mode(super::ParsingMode::AllJsonObjects),
                 ) {
                     Ok(json) => {
-                        eprintln!("multi_json got value: {json:?}");
-                        eprintln!("json_objects before complete_stack_head: {json_objects:?}");
                         complete_stack_head(&mut json_objects);
-                        eprintln!("json_objects after complete_stack_head: {json_objects:?}");
                         json_objects.push(json)
 
                     },

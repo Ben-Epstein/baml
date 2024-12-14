@@ -76,7 +76,6 @@ fn find_existing_class_field(
     class_walker: &Result<ClassWalker<'_>>,
     env_values: &EvaluationContext<'_>,
 ) -> Result<(Name, FieldType, Option<String>, bool)> {
-    eprintln!("find_existing_class_field {class_name}, {field_name}:");
     let Ok(class_walker) = class_walker else {
         anyhow::bail!("Class {} does not exist", class_name);
     };
@@ -89,8 +88,6 @@ fn find_existing_class_field(
     let desc = field_walker.description(env_values)?;
     let r#type = field_walker.r#type();
     let streaming_needed = field_walker.item.attributes.get("streaming::needed").is_some(); // TODO: Check for True.
-    eprintln!("  {name:?}, {type:?} {streaming_needed}");
-    eprintln!("  {:?}", field_walker.item.attributes);
     Ok((name, r#type.clone(), desc, streaming_needed))
 }
 

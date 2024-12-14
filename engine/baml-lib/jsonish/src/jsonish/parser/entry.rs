@@ -14,9 +14,7 @@ use baml_types::CompletionState;
 use super::ParseOptions;
 
 pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
-    eprintln!("entry::parse({str:?})");
     log::debug!("Parsing:\n{:?}\n-------\n{}\n-------", options, str);
-    dbg!(options);
 
     options.depth += 1;
     if options.depth > 100 {
@@ -48,7 +46,6 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                     unreachable!("Serde deserializes into concrete values, not AnyOf")
                 }
             }
-            eprintln!("serde returning {v:?}");
             return Ok(Value::AnyOf(vec![v], str.to_string()));
         }
         Err(e) => {
@@ -142,7 +139,6 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
             Ok(items) => match items.len() {
                 0 => {}
                 1 => {
-                    eprintln!("multi_json_parser items (1): {items:?}");
                     return Ok(Value::AnyOf(
                         vec![Value::FixedJson(
                             items
@@ -156,7 +152,6 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                     ));
                 }
                 n => {
-                    eprintln!("multi_json_parser items ({n:?}): {items:?}");
                     let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
                     let items = items
                         .into_iter()
@@ -250,7 +245,6 @@ mod tests {
     #[test]
     fn test_partial_int() {
         let res = parse("1", ParseOptions::default()).unwrap();
-        dbg!(&res);
         assert_eq!(
             res,
             to_any_of(Value::Number(1.into(), CompletionState::Incomplete), "1")
@@ -260,7 +254,6 @@ mod tests {
     #[test]
     fn test_complete_list() {
         let res = parse("[1]", ParseOptions::default()).unwrap();
-        dbg!(&res);
         assert_eq!(
             res,
             to_any_of(
@@ -276,7 +269,6 @@ mod tests {
     #[test]
     fn test_incomplete_list() {
         let res = parse("[1, 2", ParseOptions::default()).unwrap();
-        dbg!(&res);
         assert_eq!(
             res,
             to_any_of(
@@ -302,7 +294,6 @@ mod tests {
     #[test]
     fn test_incomplete_nested_list() {
         let res = parse("[1, 2, [3", ParseOptions::default()).unwrap();
-        dbg!(&res);
         assert_eq!(
             res,
             to_any_of(

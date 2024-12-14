@@ -546,7 +546,9 @@ impl<T> BamlValueWithMeta<T> {
                     Some(r) => BamlValueWithMeta::Class(name1, r, (meta1, meta2))
                 }
             }
-            _ => todo!()
+            (BamlValueWithMeta::Class(_, _, _), _) => return None,
+            (BamlValueWithMeta::Null(meta1), BamlValueWithMeta::Null(meta2)) => BamlValueWithMeta::Null((meta1, meta2)),
+            (BamlValueWithMeta::Null(_), _) => return None,
         };
         Some(ret)
     }
