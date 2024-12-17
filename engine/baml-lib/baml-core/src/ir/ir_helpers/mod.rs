@@ -618,6 +618,9 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
+    /// For any FieldType, check if the field type is FieldType::WithMetadata,
+    /// and if so, return the metadata alongside the base type.
+    /// All other field types will be returned as is, alongside default metadata.
     fn distribute_metadata<'a>(&'a self, field_type: &'a FieldType) -> (&'a FieldType, (Vec<Constraint>, StreamingBehavior)) {
         match field_type {
             FieldType::Class(class_name) => match self.find_class(class_name) {

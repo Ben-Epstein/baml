@@ -97,7 +97,7 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<Flag>> {
     }
 }
 
-trait ParsingErrorToUiJson {
+pub trait ParsingErrorToUiJson {
     fn to_ui_json(&self) -> serde_json::Value;
 }
 

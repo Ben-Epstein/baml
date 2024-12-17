@@ -135,6 +135,7 @@ macro_rules! test_partial_deserializer_streaming {
 
             let result = parsed_value_to_response(&ir, &parsed.unwrap(), &$target_type);
 
+            dbg!(&result);
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
             let value = result.unwrap();

@@ -84,7 +84,7 @@ fn process_node(
         )),
         BamlValueWithMeta::Class(ref class_name, ref fields, _) => {
             let needed_fields: HashSet<String> = needed_fields(ir, field_type)?;
-            let new_fields = fields
+            let mut new_fields = fields
                 .clone()
                 .into_iter()
                 .filter_map(|(field_name, field_value)| process_node(ir, field_value).ok().map(|v| (field_name, v)))
@@ -96,6 +96,19 @@ fn process_node(
                 }
             ).collect();
             let missing_needed_fields = needed_fields.difference(&new_field_names);
+            let nulls_for_unneeded_fields = fields.iter().filter_map(|(field_name, field)| {
+                if needed_fields.contains(field_name) || new_fields.get(field_name).is_some() {
+                    None
+                } else {
+                    let completion_state = field.meta().1.streaming_behavior().state;
+                    let field_stream_state = if completion_state { Some(CompletionState::Incomplete) } else { None };
+                    Some((field_name.clone(), BamlValueWithMeta::Null(field_stream_state)))
+                }
+            }).collect::<IndexMap<String, BamlValueWithMeta<_>>>();
+            dbg!(&nulls_for_unneeded_fields);
+
+            new_fields.extend(nulls_for_unneeded_fields);
+            dbg!(&new_fields);
             if missing_needed_fields.clone().count() == 0 {
                 Ok(BamlValueWithMeta::Class(class_name.clone(), new_fields, new_meta))
             } else {
@@ -143,6 +156,28 @@ fn needed_fields(
             Ok(needed_fields)
         }
         _ => Err(StreamingError::ExpectedClass), // TODO: Handle type aliases?.
+    }
+}
+
+fn unneeded_fields(
+    ir: &IntermediateRepr,
+    field_type: &FieldType
+) -> Result<HashSet<String>, StreamingError> {
+    match field_type {
+        FieldType::Class(class_name) => {
+            let class = ir.find_class(class_name).map_err(|_| StreamingError::ExpectedClass)?;
+            let unneeded_fields = class
+                .walk_fields()
+                .filter_map(|field: Walker<'_, &Field>| {
+                if field.streaming_needed() {
+                    None
+                } else {
+                    Some(field.name().to_string())
+                }
+            }).collect();
+            Ok(unneeded_fields)
+        },
+        _ => Err(StreamingError::ExpectedClass),
     }
 }
 

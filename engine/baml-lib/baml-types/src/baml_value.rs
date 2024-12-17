@@ -495,8 +495,17 @@ impl<T> BamlValueWithMeta<T> {
         }
     }
 
-    pub fn zip_meta<U>(self, other: BamlValueWithMeta<U>) -> Option<BamlValueWithMeta<(T,U)>> {
+    /// Combine two similar shaped baml values by tupling their metadata
+    /// on a node-by-node basis.
+    /// 
+    /// The baml value calling `zip_meta` is the "primary" one, whose value
+    /// data will live on in the returned baml value.
+    pub fn zip_meta<U: Clone>(self, other: BamlValueWithMeta<U>) -> Option<BamlValueWithMeta<(T,U)>> {
+        let other_meta: U = other.meta().clone();
         let ret = match (self, other) {
+            (BamlValueWithMeta::Null(meta1), _) => {
+                BamlValueWithMeta::Null((meta1, other_meta))
+            },
             (BamlValueWithMeta::String(s1, meta1), BamlValueWithMeta::String(s2, meta2)) if s1 == s2 => BamlValueWithMeta::String(s1, (meta1, meta2)),
             (BamlValueWithMeta::String(_,_), _) => return None,
             (BamlValueWithMeta::Int(s1, meta1), BamlValueWithMeta::Int(s2, meta2)) if s1 == s2 => BamlValueWithMeta::Int(s1, (meta1, meta2)),
@@ -547,8 +556,6 @@ impl<T> BamlValueWithMeta<T> {
                 }
             }
             (BamlValueWithMeta::Class(_, _, _), _) => return None,
-            (BamlValueWithMeta::Null(meta1), BamlValueWithMeta::Null(meta2)) => BamlValueWithMeta::Null((meta1, meta2)),
-            (BamlValueWithMeta::Null(_), _) => return None,
         };
         Some(ret)
     }

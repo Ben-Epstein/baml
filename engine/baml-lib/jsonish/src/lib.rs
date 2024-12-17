@@ -7,7 +7,7 @@ mod jsonish;
 use std::collections::HashMap;
 
 use baml_types::{BamlValue, BamlValueWithMeta, FieldType, ResponseCheck, JinjaExpression, SerializeMetadata};
-use deserializer::coercer::{ParsingContext, TypeCoercer};
+use deserializer::{coercer::{ParsingContext, ParsingError, TypeCoercer}, deserialize_flags::DeserializerConditions};
 
 pub use deserializer::types::BamlValueWithFlags;
 use internal_baml_core::ir::TypeValue;
@@ -15,6 +15,7 @@ use internal_baml_jinja::types::OutputFormatContent;
 
 use baml_types::CompletionState;
 use deserializer::deserialize_flags::Flag;
+use deserializer::types::ParsingErrorToUiJson;
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use crate::deserializer::score::WithScore;
 use jsonish::Value;
@@ -86,6 +87,37 @@ pub fn from_str(
 impl ResponseBamlValue { 
     pub fn score(&self) -> i32 {
         self.0.iter().map(|node| node.meta().0.score()).sum()
+    }
+
+    pub fn explanation_json(&self) -> Vec<serde_json::Value> {
+        let mut expl = vec![];
+        self.explanation_impl(vec!["<root>".to_string()], &mut expl);
+        expl.into_iter().map(|e| e.to_ui_json()).collect::<Vec<_>>()
+    }
+
+    fn explanation_impl(&self, scope: Vec<String>, expls: &mut Vec<ParsingError>) {
+        self.0.iter().for_each(|node| {
+            let message = match node {
+                BamlValueWithMeta::String(_,_) => "error while parsing string".to_string(),
+                BamlValueWithMeta::Int(_,_) => "error while parsing int".to_string(),
+                BamlValueWithMeta::Float(_,_) => "error while parsing float".to_string(),
+                BamlValueWithMeta::Bool(_, _) => "error while parsing bool".to_string(),
+                BamlValueWithMeta::List(_, _) => "error while parsing list".to_string(),
+                BamlValueWithMeta::Map(_, _) => "error while parsing map".to_string(),
+                BamlValueWithMeta::Enum(enum_name, _, _) => format!("error while parsing {enum_name} enum value"),
+                BamlValueWithMeta::Class(class_name,_,_) => format!("error while parsing class {class_name}"),
+                BamlValueWithMeta::Null(_) => "error while parsing null".to_string(),
+                BamlValueWithMeta::Media(_, _) => "error while parsing media".to_string(),
+            };
+            let parsing_error = ParsingError {
+                scope: scope.clone(),
+                reason: message,
+                causes: DeserializerConditions{flags: node.meta().0.clone()}.explanation(),
+            };
+            if node.meta().0.len() > 0 {
+                expls.push(parsing_error)
+            }
+        })
     }
 }
 

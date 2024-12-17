@@ -271,13 +271,11 @@ fn parsed_value_to_response(
     });
 
     let baml_value_with_streaming =
-        validate_streaming_state(ir, &baml_value, field_type).map_err(|s| anyhow::anyhow!("TODO"))?;
-    let response_value = meta_flags
-        .zip_meta(value_with_response_checks)
-        .ok_or(anyhow::anyhow!("TODO"))?
-        .zip_meta(baml_value_with_streaming)
-        .ok_or(anyhow::anyhow!("TODO"))?
-        .map_meta(|((x, y), z)| (x.clone(), y.clone(), z.clone()));
+        validate_streaming_state(ir, &baml_value, field_type).map_err(|s| anyhow::anyhow!("TODO: validate_streaming_state failed {s:?}"))?;
+    dbg!(&baml_value_with_streaming);
+    dbg!(&value_with_response_checks);
+    let response_value = baml_value_with_streaming.zip_meta(value_with_response_checks).expect("zip1 should succeed").zip_meta(meta_flags).expect("zip2 should succeed")
+    .map_meta(|((x,y),z)| (z.clone(), y.clone(), x.clone()));
     Ok(ResponseBamlValue(response_value))
 }
 const EMPTY_FILE: &str = r#"

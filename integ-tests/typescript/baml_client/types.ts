@@ -276,6 +276,7 @@ export interface Education {
   degree: string
   major: string[]
   graduation_date?: string | null
+  
 }
 
 export interface Email {

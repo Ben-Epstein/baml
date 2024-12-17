@@ -109,3 +109,18 @@ test_partial_deserializer_streaming!(
   FieldType::class("Bar"),
   {"foos": [ {"my_int": 1, "my_string": "hi"} ]}
 );
+
+const DONE_FIELD: &str = r#"
+class Foo {
+  foo string @streaming::done
+  bar string
+}
+"#;
+
+test_partial_deserializer_streaming!(
+  test_done_field,
+  DONE_FIELD,
+  r#"{"foo": ""#,
+  FieldType::class("Foo"),
+  {"foo": null, "bar": null}
+);

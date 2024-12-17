@@ -239,6 +239,13 @@ impl FieldType {
             }
         }
     }
+
+    pub fn streaming_behavior(&self) -> StreamingBehavior {
+        match self {
+            FieldType::WithMetadata { streaming_behavior, .. } => streaming_behavior.clone(),
+            _ => StreamingBehavior::default(),
+        }
+    }
 }
 
 /// Metadata on a type that determines how it behaves under streaming conditions.
