@@ -68,7 +68,9 @@ fn coerce_string(
         match value {
             crate::jsonish::Value::String(s, completion_state) => {
                 let mut baml_value = BamlValueWithFlags::String(s.to_string().into());
-                baml_value.add_flag(Flag::Incomplete);
+                if completion_state == &CompletionState::Incomplete {
+                    baml_value.add_flag(Flag::Incomplete);
+                }
                 Ok(baml_value)
             }
             crate::jsonish::Value::Null => Err(ctx.error_unexpected_null(target)),
