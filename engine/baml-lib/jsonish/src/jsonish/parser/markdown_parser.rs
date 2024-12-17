@@ -13,7 +13,7 @@ pub enum MarkdownResult {
 }
 
 pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
-    let mut values = vec![];
+    let mut values: Vec<MarkdownResult> = vec![];
 
     let mut remaining = str;
     // Find regex for markdown blocks (```<tag><EOF|newline>)
@@ -47,6 +47,7 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
 
         match res {
             Ok(v) => {
+                eprintln!("Pushing value {v:?}");
                 // TODO: Add any more additional strings here.
                 values.push(MarkdownResult::CodeBlock(
                     if tag.len() > 3 {
@@ -140,6 +141,7 @@ print("Hello, world!")
             let Value::AnyOf(value, _) = value else {
                 panic!("Expected AnyOf, got {:#?}", value);
             };
+            dbg!(&value);
             assert!(value.contains(&Value::String(
                 "This is a test".to_string(),
                 CompletionState::Complete

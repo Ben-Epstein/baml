@@ -89,10 +89,20 @@ fn process_node(
                 .into_iter()
                 .filter_map(|(field_name, field_value)| process_node(ir, field_value).ok().map(|v| (field_name, v)))
                 .collect::<IndexMap<String,BamlValueWithMeta<_>>>();
-            let new_field_names = new_fields.iter().map(|(field_name, _)| field_name.clone()).collect();
+            let new_field_names = new_fields.iter().filter_map(|(field_name, field_value)|
+                match field_value {
+                    BamlValueWithMeta::Null(_) => None,
+                    _ => Some(field_name.clone()),
+                }
+            ).collect();
             let missing_needed_fields = needed_fields.difference(&new_field_names);
+            if missing_needed_fields.clone().count() == 0 {
+                Ok(BamlValueWithMeta::Class(class_name.clone(), new_fields, new_meta))
+            } else {
+                eprintln!("  Missing needed fields: {missing_needed_fields:?}");
+                Err(StreamingError::MissingNeededFields)
+            }
 
-            Ok(BamlValueWithMeta::Class(class_name.clone(), new_fields, new_meta))
         }
         BamlValueWithMeta::Enum(name, value, _) => Ok(BamlValueWithMeta::Enum(name, value, new_meta)),
         BamlValueWithMeta::Map(kvs, _) => {

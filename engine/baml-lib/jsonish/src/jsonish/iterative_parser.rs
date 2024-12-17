@@ -3,6 +3,7 @@
 use std::iter::Peekable;
 
 use anyhow::Result;
+use baml_types::CompletionState;
 
 /* Try and see if there is a json object somewhere in the string
  * Could be a "[...] some text" or "{...} some text" or even a:
@@ -177,7 +178,7 @@ impl JsonParseState {
         }
     }
 
-    fn complete_collection(&mut self) {
+    fn complete_collection(&mut self, completion_state: CompletionState) {
         let collection = match self.collection_stack.pop() {
             Some(collection) => collection,
             None => return,
@@ -187,10 +188,13 @@ impl JsonParseState {
 
         log::debug!("Completed: {:?} -> {:?}", name, collection);
 
-        let value: serde_json::Value = match collection.into() {
+        let mut value: serde_json::Value = match collection.into() {
             Some(value) => value,
             None => return,
         };
+        if completion_state == CompletionState::Complete {
+            value.complete_deeply();
+        }
 
         if let Some(last) = self.collection_stack.last_mut() {
             match last {
@@ -259,7 +263,7 @@ impl JsonParseState {
     fn should_close_unescaped_string(
         &mut self,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
-    ) -> Option<usize> {
+    ) -> CloseStringResult {
         let pos = if self.collection_stack.len() >= 2 {
             self.collection_stack
                 .get(self.collection_stack.len() - 2)
@@ -286,28 +290,28 @@ impl JsonParseState {
                     counter = idx;
                     match c {
                         // If at some point we find a valid json character, we'll close the string
-                        '{' | '[' => return Some(idx),
+                        '{' | '[' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
                             let _ = self.consume(x);
                         }
                     }
                 }
-                Some(counter)
+                CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
-            1 => None,
+            1 => CloseStringResult::Continue,
             2 => {
                 // in object key
                 let mut counter = 0;
                 for (idx, c) in next.by_ref() {
                     counter = idx;
                     match c {
-                        ':' => return Some(idx),
+                        ':' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
                             let _ = self.consume(x);
                         }
                     }
                 }
-                Some(counter)
+                CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             3 => {
                 // in object value
@@ -319,23 +323,23 @@ impl JsonParseState {
                             if let Some((_, next_c)) = next.peek() {
                                 match next_c {
                                     '\n' => {
-                                        return Some(idx);
+                                        return CloseStringResult::Close(idx, CompletionState::Complete);
                                     }
                                     _ => {
                                         let _ = self.consume(c);
                                     }
                                 }
                             } else {
-                                return Some(idx);
+                                return CloseStringResult::Close(idx, CompletionState::Complete);
                             }
                         }
-                        '}' => return Some(idx),
+                        '}' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
                             let _ = self.consume(x);
                         }
                     }
                 }
-                Some(counter)
+                CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             4 => {
                 // in array
@@ -343,14 +347,14 @@ impl JsonParseState {
                 for (idx, c) in next {
                     counter = idx;
                     match c {
-                        ',' => return Some(idx),
-                        ']' => return Some(idx),
+                        ',' => return CloseStringResult::Close(idx, CompletionState::Complete),
+                        ']' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
                             let _ = self.consume(x);
                         }
                     }
                 }
-                Some(counter)
+                CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             _ => unreachable!("Invalid position"),
         }
@@ -530,8 +534,8 @@ impl JsonParseState {
                     // - A terminating json character (comma, colon, bracket, space, newline)
                     // - A character
                     let res = self.consume(token);
-                    if let Some(count) = self.should_close_unescaped_string(next) {
-                        self.complete_collection();
+                    if let CloseStringResult::Close(count, completion_state) = self.should_close_unescaped_string(next) {
+                        self.complete_collection(completion_state);
                         Ok(count)
                     } else {
                         res
@@ -805,4 +809,9 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<serde_j
     } else {
         Err(anyhow::anyhow!("Failed to parse JSON"))
     }
+}
+
+enum CloseStringResult {
+    Close(usize, CompletionState),
+    Continue
 }

@@ -27,7 +27,9 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
         Ok(mut v) => {
             match &mut v {
                 Value::String(_, completion_state) => {
-                    *completion_state = CompletionState::Incomplete;
+                    // The string must have been contained in quotes in order
+                    // to parse as a JSON string, therefore it is complete.
+                    *completion_state = CompletionState::Complete;
                 }
                 Value::Number(_, completion_state) => {
                     *completion_state = CompletionState::Incomplete;
@@ -116,7 +118,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             _ => None,
                         })
                         .map(|(s, v)| {
-                            Value::Markdown(s.to_string(), Box::new(v), CompletionState::Incomplete)
+                            Value::Markdown(s.to_string(), Box::new(v.clone()), v.completion_state().clone())
                         })
                         .collect::<Vec<_>>();
                     let array = Value::Array(items.clone(), CompletionState::Incomplete);
