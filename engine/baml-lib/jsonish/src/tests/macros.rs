@@ -127,8 +127,9 @@ macro_rules! test_partial_deserializer_streaming {
                 true,
             );
 
-            dbg!(&target);
-            dbg!(&$target_type);
+            // dbg!(&target);
+            // dbg!(&$target_type);
+            dbg!(&parsed);
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 

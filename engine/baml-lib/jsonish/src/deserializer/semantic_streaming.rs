@@ -51,13 +51,13 @@ fn process_node(
 
     let must_be_done = required_done(ir, field_type);
 
-    eprintln!("Working on {value:?}");
-    eprintln!("  completion: {completion_state:?}");
-    eprintln!("  field_type: {field_type:?}");
-    eprintln!("  mustbedone: {}", must_be_done);
+    // eprintln!("Working on {value:?}");
+    // eprintln!("  completion: {completion_state:?}");
+    // eprintln!("  field_type: {field_type:?}");
+    // eprintln!("  mustbedone: {}", must_be_done);
 
     if must_be_done && !(completion_state == &CompletionState::Complete) {
-        eprintln!("  Aborting because incomplete");
+        // eprintln!("  Aborting because incomplete");
         return Err(StreamingError::IncompleteDoneValue);
     }
 
@@ -66,7 +66,7 @@ fn process_node(
     } else {
         None
     };
-    eprintln!("  new_meta: {:?}", new_meta);
+    // eprintln!("  new_meta: {:?}", new_meta);
 
     let new_value = match value {
         BamlValueWithMeta::String(s, _) => Ok(BamlValueWithMeta::String(s, new_meta)),
@@ -99,7 +99,7 @@ fn process_node(
             if missing_needed_fields.clone().count() == 0 {
                 Ok(BamlValueWithMeta::Class(class_name.clone(), new_fields, new_meta))
             } else {
-                eprintln!("  Missing needed fields: {missing_needed_fields:?}");
+                // eprintln!("  Missing needed fields: {missing_needed_fields:?}");
                 Err(StreamingError::MissingNeededFields)
             }
 
@@ -111,7 +111,7 @@ fn process_node(
         }
     };
 
-    eprintln!("  new_value: {new_value:?}");
+    // eprintln!("  new_value: {new_value:?}");
     // let mut value_meta = new_value.meta_mut();
     // *value_meta = new_meta;
     new_value
@@ -171,10 +171,10 @@ fn required_done(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
             unreachable!("distribute_metadata always consumes `WithMetadata`.")
         }
     };
-    eprintln!("  type_implies_done: {type_implies_done:?}");
-    eprintln!("  streaming_has_done: {:?}", streaming_behavior.done);
+    // eprintln!("  type_implies_done: {type_implies_done:?}");
+    // eprintln!("  streaming_has_done: {:?}", streaming_behavior.done);
     let res = type_implies_done || streaming_behavior.done;
-    eprintln!("  res: {:?}", res);
+    // eprintln!("  res: {:?}", res);
     res
 }
 

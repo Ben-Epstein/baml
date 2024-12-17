@@ -33,7 +33,7 @@ impl TypeCoercer for FieldType {
                     self.coerce(
                         ctx,
                         target,
-                        Some(&crate::jsonish::Value::String(primitive.clone(), CompletionState::Complete)),
+                        Some(&crate::jsonish::Value::String(primitive.clone(), CompletionState::Incomplete)),
                     )
                 } else {
                     array_helper::coerce_array_to_singular(

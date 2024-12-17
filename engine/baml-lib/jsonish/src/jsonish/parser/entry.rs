@@ -25,6 +25,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 
     match serde_json::from_str(str) {
         Ok(mut v) => {
+            dbg!("SERDE");
             match &mut v {
                 Value::String(_, completion_state) => {
                     // The string must have been contained in quotes in order
@@ -141,7 +142,9 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
             Ok(items) => match items.len() {
                 0 => {}
                 1 => {
-                    return Ok(Value::AnyOf(
+                    eprintln!("MULTI_JSON: {items:?}");
+                    let ret =
+                      Value::AnyOf(
                         vec![Value::FixedJson(
                             items
                                 .into_iter()
@@ -151,7 +154,9 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             vec![Fixes::GreppedForJSON],
                         )],
                         str.to_string(),
-                    ));
+                    );
+                    eprintln!("ret: {ret:?}");
+                    return Ok(ret);
                 }
                 n => {
                     let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
