@@ -1,6 +1,6 @@
 class TestOutputClass {
-  prop1 string @description("A long string with about 20 words") @streaming::done @streaming::state
-  prop2 int @streaming::state
+  prop1 string @description("A long string with about 20 words") @stream.done @stream.with_state
+  prop2 int @stream.with_state
 }
 
 function FnOutputClass(input: string) -> TestOutputClass {

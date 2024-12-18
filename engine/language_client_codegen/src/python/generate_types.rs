@@ -150,6 +150,13 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                 .static_fields
                 .iter()
                 .map(|f| {
+                    let plain_field = add_default_value(
+                            &f.elem.r#type.elem,
+                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false));
+                    let done_field = add_default_value(
+                        &f.elem.r#type.elem,
+                        &f.elem.r#type.elem.to_type_ref(c.db)
+                    );
                     (
                         f.elem.name.as_str(),
                         add_default_value(
@@ -301,15 +308,20 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false),
-            FieldType::WithMetadata { base, .. } => {
+            FieldType::WithMetadata { base, streaming_behavior, .. } => {
                 let base_type_ref = base.to_partial_type_ref(ir, false);
-                match field_type_attributes(self) {
+                let base_considering_checks = match field_type_attributes(self) {
                     Some(checks) => {
                         let base_type_ref = base.to_partial_type_ref(ir, false);
                         let checks_type_ref = type_name_for_checks(&checks);
                         format!("Checked[{base_type_ref},{checks_type_ref}]")
                     }
                     None => base_type_ref,
+                };
+                if streaming_behavior.done {
+                    format!("StreamState[{base_considering_checks}]")
+                } else {
+                    base_considering_checks
                 }
             }
         }

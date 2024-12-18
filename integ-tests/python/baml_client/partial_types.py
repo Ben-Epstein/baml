@@ -16,7 +16,7 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, List, Optional, Union, Literal
+from typing import Dict, Generic, List, Optional, TypeVar, Union, Literal
 
 from . import types
 from .types import Checked, Check
@@ -27,6 +27,11 @@ from .types import Checked, Check
 #  is still being built up and any of its fields is not yet fully available.
 #
 ###############################################################################
+
+T = TypeVar('T')
+class StreamState(BaseModel, Generic[T]):
+    value: T
+    completion_state: Literal["Pending", "Incomplete", "Complete"]
 
 
 class BigNumbers(BaseModel):
@@ -319,7 +324,7 @@ class TestClassWithEnum(BaseModel):
     prop2: Optional[types.EnumInClass] = None
 
 class TestOutputClass(BaseModel):
-    prop1: Optional[str] = None
+    prop1: StreamState[Optional[str]]
     prop2: Optional[int] = None
 
 class Tree(BaseModel):
