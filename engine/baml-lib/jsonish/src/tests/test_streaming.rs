@@ -32,7 +32,7 @@ test_partial_deserializer_streaming!(
 const TOPLEVEL_DONE: &str = r#"
 class Foo {
   nums int[]
-  @@streaming::done
+  @@stream.done
 }
 "#;
 
@@ -46,7 +46,7 @@ test_partial_deserializer_streaming_failure!(
 const NESTED_DONE: &str = r#"
 class Foo {
   nums int[]
-  @@streaming::done
+  @@stream.done
 }
 
 class Bar {
@@ -69,11 +69,11 @@ test_partial_deserializer_streaming!(
 const NESTED_DONE_WITH_TOPLEVEL_DONE: &str = r#"
 class Foo {
   nums int[]
-  @@streaming::done
+  @@stream.done
 }
 
 class Bar {
-  message string @streaming::done
+  message string @stream.done
   foos Foo[]
 }
 "#;
@@ -112,7 +112,7 @@ test_partial_deserializer_streaming!(
 
 const DONE_FIELD: &str = r#"
 class Foo {
-  foo string @streaming::done
+  foo string @stream.done
   bar string
 }
 "#;

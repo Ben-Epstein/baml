@@ -273,20 +273,20 @@ The BAML language provides several attributes that can be attached to types
 to control streaming behavior, ensuring that the partial values streamed to you
 are always valid within your own semantics.
 
-  - `@streaming::done`: Marks a type that should only be streamed when it is
+  - `@stream.done`: Marks a type that should only be streamed when it is
     done being read from the LLM response.
-  - `@streaming::needed`: Marks a field to indicate that the class containing
+  - `@stream.not_null`: Marks a field to indicate that the class containing
      that field should only be streamed if that field is present (the field needed
      not be completed)
   - `@streaming::state`: Adds metadata to a type indicating whether types appearing
     
-### `@streaming::done`
+### `@stream.done`
 
-To demonstrate the use of `@streaming::done`, imagine that a `ReceiptItem`
+To demonstrate the use of `@stream.done`, imagine that a `ReceiptItem`
 must only be consider valid and can only reach the client when its `name`,
 `description`, `quantity` and `price` fields are completely streamed in.
 To achieve this we can annotate the `ReceiptItem` class with the
-`@streaming::done` attribute:
+`@stream.done` attribute:
 
 ```rust
 class ReceiptItem {
@@ -294,7 +294,7 @@ class ReceiptItem {
   description string?
   quantity int
   price float
-  @@streaming::done
+  @@stream.done
 }
 ```
 
@@ -303,13 +303,13 @@ When generating the client code for `ReceiptType` none of the fields of
 no `ReceiptItem` will be streamed out until all of its fields are done being
 streamed in.
 
-### `@streaming::needed`
+### `@stream.not_null`
 
 Sometimes the presence of a value is important to the correct interpretation
 of a containing value. This commonly occurs with tags used to determine which
 part of a union is being used.
 
-For example, in this code block, `@streaming::needed` on each of the
+For example, in this code block, `@stream.not_null` on each of the
 `message_type` fields will ensure that an `Event` is never streamed until
 enough tokens have been received to precisely know what the message type is,
 allowing you to build UI appropriate to the message type before the other
@@ -317,7 +317,7 @@ fields have been completed.
 
 ```rust
 class Message {
-  message_type "greeting" | "within-convo" | "farewell" @streaming::needed
+  message_type "greeting" | "within-convo" | "farewell" @stream.not_null
   gesture ("gesticulate" | "wave" | "shake-hands" | "hug")?
   message string
 }
@@ -331,20 +331,20 @@ function Chat(history: Event[]) -> Event { ... }
 ```
 
 <Tip>
-You might wonder if it's sufficient to use `@streaming::done` on the
-`message_type` field. `@streaming::done` applies to types, preventing them
+You might wonder if it's sufficient to use `@stream.done` on the
+`message_type` field. `@stream.done` applies to types, preventing them
 from streaming out until they are completed. On the other hand,
-`@streaming::needed` applies to fields and prevents a containing object
+`@stream.not_null` applies to fields and prevents a containing object
 from streaming out until that field is present.
 
-A type with `@streaming::done` on it will still be converted to a
+A type with `@stream.done` on it will still be converted to a
 nullable field in the generated partial types, so this change would not
 produce the desired result of witholding a `Message` until its type is
 known. Messages would be streamed with `message_type: null`.
 
-This is a subtle distinction between `@streaming::done` and
-`@streaming::needed`. As a rule of thumb, remember that `@streaming::done`
-is about the type itself, and `@streaming::needed` is about the type's
+This is a subtle distinction between `@stream.done` and
+`@stream.not_null`. As a rule of thumb, remember that `@stream.done`
+is about the type itself, and `@stream.not_null` is about the type's
 containing context.
 </Tip>
 
@@ -358,7 +358,7 @@ you attach metadata to types to indicate this state in client code.
 <Tab title="BAML">
 ```rust
 class Message {
-  message_type "greeting" | "within-convo" | "farewell" @streaming::needed
+  message_type "greeting" | "within-convo" | "farewell" @stream.not_null
   gesture ("gesticulate" | "wave" | "shake-hands" | "hug")?
   message string @streaming::state
 }
@@ -414,12 +414,12 @@ class Recommendation {
   stock Stock
   amount float
   action "buy" | "sell"
-  @@streaming::done
+  @@stream.done
 }
 
 class Message {
-  message_type "greeting" | "conversation" | "farewell" @streaming::needed
-  message string @streaming::state @streaming::needed
+  message_type "greeting" | "conversation" | "farewell" @stream.not_null
+  message string @streaming::state @stream.not_null
 }
 
 function Respond(
@@ -435,12 +435,12 @@ The above BAML code will generate the following Python definitions in the
 the generated code:
 
  - `Recommendation` does not have any partial field because it was marked
-   `@streaming::done`.
+   `@stream.done`.
  - The `Message.message` `string` is wrapped in `StreamingState`, allowing
    runtime checking of its completion status. This status could be used
    to render a spinner as the message streams in.
  - The `Message.message_type` field may not be `null`, because it was marked
-   as `@streaming::needed`.
+   as `@stream.not_null`.
 
 ```python
 class StreamingState(BaseModel, Generic[T]):
@@ -470,12 +470,12 @@ The above BAML code will generate the following Typescript definitions in the
 the generated code:
 
  - `Recommendation` does not have any partial field because it was marked
-   `@streaming::done`.
+   `@stream.done`.
  - The `Message.message` `string` is wrapped in `StreamingState`, allowing
    runtime checking of its completion status. This status could be used
    to render a spinner as the message streams in.
  - The `Message.message_type` field may not be `null`, because it was marked
-   as `@streaming::needed`.
+   as `@stream.not_null`.
 
 ```typescript
 export interface StreamingState<T> {

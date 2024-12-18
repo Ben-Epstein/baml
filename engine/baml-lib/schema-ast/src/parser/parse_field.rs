@@ -73,7 +73,7 @@ fn reassociate_type_attributes(field_attributes: &mut Vec<Attribute>, field_type
     *field_attributes = attrs_for_field;
 }
 
-const TYPE_ATTRIBUTE_NAMES: [&str; 4] = ["assert", "check", "streaming::done", "streaming::state"];
+const TYPE_ATTRIBUTE_NAMES: [&str; 4] = ["assert", "check", "stream.done", "stream.with_state"];
 
 pub(crate) fn parse_type_expr(
     model_name: &Option<Identifier>,
@@ -486,12 +486,12 @@ mod tests {
     #[test]
     fn streaming_attributes() {
         test_parse_baml_type! {
-            source: r#"int @streaming::done @streaming::needed @streaming::state"#,
+            source: r#"int @stream.done @stream.not_null @stream.with_state"#,
             target: FieldType::Primitive(
                 FieldArity::Required,
                 TypeValue::Int,
                 Span::fake(),
-                Some(vec![mk_bare_attribute("streaming::done"), mk_bare_attribute("streaming::needed"), mk_bare_attribute("streaming::state")])
+                Some(vec![mk_bare_attribute("stream.done"), mk_bare_attribute("stream.not_null"), mk_bare_attribute("stream.with_state")])
             ),
         }
     }

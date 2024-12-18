@@ -248,8 +248,8 @@ impl NodeAttributes {
             }
         }
         StreamingBehavior {
-            done: is_some_true(self.get("streaming::done")),
-            state: is_some_true(self.get("streaming::state")),
+            done: is_some_true(self.get("stream.done")),
+            state: is_some_true(self.get("stream.with_state")),
         }
     }
 }
@@ -306,7 +306,7 @@ fn to_ir_attributes(
         let streaming_done = streaming_done.as_ref().and_then(|v| {
             if *v {
                 Some((
-                    "streaming::done".to_string(),
+                    "stream.done".to_string(),
                     UnresolvedValue::Bool(true, ()),
                 ))
             } else {
@@ -316,7 +316,7 @@ fn to_ir_attributes(
         let streaming_needed = streaming_needed.as_ref().and_then(|v| {
             if *v {
                 Some((
-                    "streaming::needed".to_string(),
+                    "stream.not_null".to_string(),
                     UnresolvedValue::Bool(true, ()),
                 ))
             } else {
@@ -326,7 +326,7 @@ fn to_ir_attributes(
         let streaming_state = streaming_state.as_ref().and_then(|v| {
             if *v {
                 Some((
-                    "streaming::state".to_string(),
+                    "stream.with_state".to_string(),
                     UnresolvedValue::Bool(true, ()),
                 ))
             } else {
@@ -425,20 +425,20 @@ impl WithRepr<FieldType> for ast::FieldType {
         if self
             .attributes()
             .iter()
-            .find(|Attribute { name, .. }| name.name() == "streaming::done")
+            .find(|Attribute { name, .. }| name.name() == "stream.done")
             .is_some()
         {
             let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
-            meta.insert("streaming::done".to_string(), val);
+            meta.insert("stream.done".to_string(), val);
         }
         if self
             .attributes()
             .iter()
-            .find(|Attribute { name, .. }| name.name() == "streaming::state")
+            .find(|Attribute { name, .. }| name.name() == "stream.with_state")
             .is_some()
         {
             let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
-            meta.insert("streaming::state".to_string(), val);
+            meta.insert("stream.with_state".to_string(), val);
         }
         let attributes = NodeAttributes {
             meta,
@@ -1196,8 +1196,8 @@ fn streaming_behavior_from_attributes(attributes: &NodeAttributes) -> StreamingB
         }
     }
     StreamingBehavior {
-        done: is_some_true(attributes.get("streaming::done")),
-        state: is_some_true(attributes.get("streaming::state")),
+        done: is_some_true(attributes.get("stream.done")),
+        state: is_some_true(attributes.get("stream.with_state")),
     }
 }
 
@@ -1303,15 +1303,15 @@ mod tests {
         let ir = make_test_ir(
             r##"
             class Foo {
-              foo_int int @streaming::needed
-              foo_bool bool @streaming::state
-              foo_list int[] @streaming::done
+              foo_int int @stream.not_null
+              foo_bool bool @stream.with_state
+              foo_list int[] @stream.done
             }
 
             class Bar {
-              name string @streaming::done
+              name string @stream.done
               message string
-              @@streaming::done
+              @@stream.done
             }
         "##,
         )
@@ -1322,13 +1322,13 @@ mod tests {
             [field1, field2, field3] => {
                 let type1 = &field1.item.elem.r#type;
                 assert!(field1.streaming_needed());
-                assert!(type1.attributes.get("streaming::needed").is_none());
+                assert!(type1.attributes.get("stream.not_null").is_none());
                 let type2 = &field2.item.elem.r#type;
                 assert!(!field2.streaming_state());
-                assert!(type2.attributes.get("streaming::state").is_some());
+                assert!(type2.attributes.get("stream.with_state").is_some());
                 let type3 = &field3.item.elem.r#type;
                 assert!(!field3.streaming_done());
-                assert!(type3.attributes.get("streaming::done").is_some());
+                assert!(type3.attributes.get("stream.done").is_some());
             }
             _ => panic!("Expected exactly 3 fields"),
         }
@@ -1342,7 +1342,7 @@ mod tests {
                     .elem
                     .r#type
                     .attributes
-                    .get("streaming::done")
+                    .get("stream.done")
                     .is_some());
             }
             _ => panic!("Expected exactly 2 fields"),
