@@ -305,6 +305,7 @@ pub fn type_check_attributes(ir: &IntermediateRepr) -> HashSet<TypeCheckAttribut
 }
 
 /// The set of Check names associated with a type.
+/// TODO: This should use `distribute_metadata` instead of pattern matching.
 fn field_type_attributes(field_type: &FieldType) -> Option<TypeCheckAttributes> {
     match field_type {
         FieldType::WithMetadata { base, constraints, .. } => {

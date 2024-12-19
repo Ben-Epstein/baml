@@ -114,8 +114,7 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
                     (
                         Cow::Borrowed(f.elem.name.as_str()),
                         add_default_value(
-                            &f.elem.r#type.elem,
-                            &f.elem.r#type.elem.to_type_ref(c.db),
+                            &f.elem.r#type.elem.to_type_ref(c.db, false),
                         ),
                         f.elem.docstring.as_ref().map(render_docstring),
                     )
@@ -150,19 +149,26 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                 .static_fields
                 .iter()
                 .map(|f| {
+                    // For plain fields, use to_partial_type_ref directly.
                     let plain_field = add_default_value(
-                            &f.elem.r#type.elem,
-                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false));
+                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false, false));
+                    // Fields with @stream.done should take their type from
                     let done_field = add_default_value(
-                        &f.elem.r#type.elem,
-                        &f.elem.r#type.elem.to_type_ref(c.db)
+                        &optional(&f.elem.r#type.elem.to_type_ref(c.db, true))
                     );
+                    let needed_field = add_default_value(
+                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false, true));
+                    let needed: bool = f.attributes.get("stream.not_null").is_some();
+                    let done: bool = f.elem.r#type.elem.streaming_behavior().done;
+                    let field = match (done, needed) {
+                        (false, false) => plain_field,
+                        (true, false) => done_field,
+                        (false, true) => needed_field,
+                        (true, true) => done_field, // TODO: Fix.
+                    };
                     (
                         f.elem.name.as_str(),
-                        add_default_value(
-                            &f.elem.r#type.elem,
-                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false),
-                        ),
+                        field,
                         f.elem.docstring.as_ref().map(render_docstring),
                     )
                 })
@@ -172,7 +178,8 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
     }
 }
 
-pub fn add_default_value(node: &FieldType, type_str: &String) -> String {
+/// For a field whose type
+pub fn add_default_value(type_str: &String) -> String {
     if type_str.starts_with("Optional[") {
         format!("{} = None", type_str)
     } else {
@@ -208,12 +215,14 @@ pub fn to_python_literal(literal: &LiteralValue) -> String {
 }
 
 trait ToTypeReferenceInTypeDefinition {
-    fn to_type_ref(&self, ir: &IntermediateRepr) -> String;
-    fn to_partial_type_ref(&self, ir: &IntermediateRepr, wrapped: bool) -> String;
+    fn to_type_ref(&self, ir: &IntermediateRepr, module_prefix: bool) -> String;
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr, wrapped: bool, needed: bool) -> String;
 }
 
 impl ToTypeReferenceInTypeDefinition for FieldType {
-    fn to_type_ref(&self, ir: &IntermediateRepr) -> String {
+    // TODO: use_module_prefix boolean blindness. Replace with str?
+    fn to_type_ref(&self, ir: &IntermediateRepr, use_module_prefix: bool) -> String {
+        let module_prefix = if use_module_prefix { "types." } else {""};
         match self {
             FieldType::Enum(name) => {
                 if ir
@@ -221,23 +230,23 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .map(|e| e.item.attributes.get("dynamic_type").is_some())
                     .unwrap_or(false)
                 {
-                    format!("Union[\"{name}\", str]")
+                    format!("Union[\"{module_prefix}{name}\", str]")
                 } else {
-                    format!("\"{name}\"")
+                    format!("\"{module_prefix}{name}\"")
                 }
             }
             FieldType::Literal(value) => to_python_literal(value),
-            FieldType::Class(name) => format!("\"{name}\""),
-            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
+            FieldType::Class(name) => format!("\"{module_prefix}{name}\""),
+            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir, use_module_prefix)),
             FieldType::Map(key, value) => {
-                format!("Dict[{}, {}]", key.to_type_ref(ir), value.to_type_ref(ir))
+                format!("Dict[{}, {}]", key.to_type_ref(ir, use_module_prefix), value.to_type_ref(ir, use_module_prefix))
             }
             FieldType::Primitive(r#type) => r#type.to_python(),
             FieldType::Union(inner) => format!(
                 "Union[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref(ir))
+                    .map(|t| t.to_type_ref(ir, use_module_prefix))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -245,29 +254,36 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 "Tuple[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref(ir))
+                    .map(|t| t.to_type_ref(ir, use_module_prefix))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref(ir)),
+            FieldType::Optional(inner) => format!("Optional[{}]", inner.to_type_ref(ir, use_module_prefix)),
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
-                    let base_type_ref = base.to_type_ref(ir);
+                    let base_type_ref = base.to_type_ref(ir, use_module_prefix);
                     let checks_type_ref = type_name_for_checks(&checks);
                     format!("Checked[{base_type_ref},{checks_type_ref}]")
                 }
-                None => base.to_type_ref(ir),
+                None => base.to_type_ref(ir, use_module_prefix),
             },
         }
     }
 
-    fn to_partial_type_ref(&self, ir: &IntermediateRepr, wrapped: bool) -> String {
-        match self {
+
+    fn to_partial_type_ref(&self, ir: &IntermediateRepr, wrapped: bool, needed: bool) -> String {
+        let (base_type, metadata) = ir.distribute_metadata(self);
+        let is_partial_type = !metadata.1.done;
+        let use_module_prefix = !is_partial_type;
+        let with_state = metadata.1.state;
+        let constraints = metadata.0;
+        let base_rep = match base_type {
             FieldType::Class(name) => {
-                if wrapped {
-                    format!("\"{name}\"")
+              let import_prefix = if is_partial_type { "" } else { "types." };
+                if wrapped || needed {
+                    format!("\"{import_prefix}{name}\"")
                 } else {
-                    format!("Optional[\"{name}\"]")
+                    format!("Optional[\"{import_prefix}{name}\"]")
                 }
             }
             FieldType::Enum(name) => {
@@ -278,53 +294,77 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 {
                     format!("Optional[Union[types.{name}, str]]")
                 } else {
-                    format!("Optional[types.{name}]")
+                    if needed {
+                        format!("types.{name}")
+                    } else {
+                      format!("Optional[types.{name}]")
+                    }
                 }
             }
-            FieldType::Literal(value) => to_python_literal(value),
-            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir, true)),
+            FieldType::Literal(value) => to_python_literal(value), // TODO: Handle `needed` here.
+            FieldType::List(inner) => format!("List[{}]", inner.to_partial_type_ref(ir, true, false)),
             FieldType::Map(key, value) => {
                 format!(
                     "Dict[{}, {}]",
-                    key.to_type_ref(ir),
-                    value.to_partial_type_ref(ir, false)
+                    key.to_type_ref(ir, use_module_prefix),
+                    value.to_partial_type_ref(ir, false, false)
                 )
             }
-            FieldType::Primitive(r#type) => format!("Optional[{}]", r#type.to_python()),
-            FieldType::Union(inner) => format!(
-                "Optional[Union[{}]]",
-                inner
-                    .iter()
-                    .map(|t| t.to_partial_type_ref(ir, true))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            FieldType::Tuple(inner) => format!(
-                "Optional[Tuple[{}]]",
-                inner
-                    .iter()
-                    .map(|t| t.to_partial_type_ref(ir, false))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false),
-            FieldType::WithMetadata { base, streaming_behavior, .. } => {
-                let base_type_ref = base.to_partial_type_ref(ir, false);
-                let base_considering_checks = match field_type_attributes(self) {
-                    Some(checks) => {
-                        let base_type_ref = base.to_partial_type_ref(ir, false);
-                        let checks_type_ref = type_name_for_checks(&checks);
-                        format!("Checked[{base_type_ref},{checks_type_ref}]")
-                    }
-                    None => base_type_ref,
-                };
-                if streaming_behavior.done {
-                    format!("StreamState[{base_considering_checks}]")
+            FieldType::Primitive(r#type) => {
+                if needed {
+                    r#type.to_python()
                 } else {
-                    base_considering_checks
+                format!("Optional[{}]", r#type.to_python())
                 }
-            }
-        }
+            },
+            FieldType::Union(inner) => {
+                let union_contents =
+                inner
+                    .iter()
+                    .map(|t| t.to_partial_type_ref(ir, true, false))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if needed {
+                    format!("Union[{union_contents}]")
+                } else {
+                    format!("Optional[Union[{union_contents}]]")
+                }
+            },
+            FieldType::Tuple(inner) => {
+                let tuple_contents =
+                inner
+                    .iter()
+                    .map(|t| t.to_partial_type_ref(ir, false, false))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if needed { format!("Tuple[{tuple_contents}]") } else { format!("Optional[Tuple[{tuple_contents}]]")
+                }
+            },
+            FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false, false),
+            FieldType::WithMetadata{..} => unreachable!("distribute_metadata makes this branch unreachable."),
+        };
+        let base_type_ref = if is_partial_type {
+            base_rep
+        } else {
+            base_type.to_type_ref(ir, use_module_prefix)
+        };
+        dbg!(&base_type_ref);
+        let rep_with_checks = match field_type_attributes(self) {
+          Some(checks) => {
+            let checks_type_ref = type_name_for_checks(&checks);
+            format!("Checked[{base_type_ref},{checks_type_ref}]")
+          },
+          None => base_type_ref
+        };
+        dbg!(&rep_with_checks);
+        let rep_with_stream_state = if with_state {
+          stream_state(&rep_with_checks)
+        } else {
+          rep_with_checks
+        };
+        dbg!(&self);
+        dbg!(&rep_with_stream_state);
+        rep_with_stream_state
     }
 }
 
@@ -334,3 +374,12 @@ fn render_docstring(d: &Docstring) -> String {
     let lines = d.0.as_str().replace("\n", "\n    ");
     format!("\"\"\"{lines}\"\"\"")
 }
+
+fn optional(base: &str) -> String {
+    format!("Optional[{base}]")
+}
+
+fn stream_state(base: &str) -> String {
+    format!("StreamState[{base}]")
+}
+

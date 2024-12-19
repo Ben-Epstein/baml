@@ -94,7 +94,7 @@ fn find_new_class_field(
     let name = Name::new_with_alias(field_name.to_string(), alias.value());
     let desc = desc.value();
 
-    Ok((name, field_overrides.0.clone(), desc, false)) // TODO: Field overrides are not "streaming::needed". Should this be configurable?
+    Ok((name, field_overrides.0.clone(), desc, false)) // TODO: Field overrides are not "stream.not_nul". Should this be configurable?
 }
 
 fn find_existing_class_field(
@@ -121,7 +121,7 @@ fn find_existing_class_field(
     if let Some(attrs) = field_overrides {
         alias = OverridableValue::<String>::from(attrs.alias.as_ref());
         desc = OverridableValue::<String>::from(attrs.meta.get("description"));
-        needed = OverridableValue::<bool>::from(attrs.meta.get("streaming::needed"));
+        needed = OverridableValue::<bool>::from(attrs.meta.get("stream.not_null"));
     }
 
     let eval_ctx = ctx.eval_ctx(false);

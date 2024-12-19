@@ -87,7 +87,7 @@ fn find_existing_class_field(
     let name = Name::new_with_alias(field_name.to_string(), field_walker.alias(env_values)?);
     let desc = field_walker.description(env_values)?;
     let r#type = field_walker.r#type();
-    let streaming_needed = field_walker.item.attributes.get("streaming::needed").is_some(); // TODO: Check for True.
+    let streaming_needed = field_walker.item.attributes.get("stream.not_null").is_some(); // TODO: Check for True.
     Ok((name, r#type.clone(), desc, streaming_needed))
 }
 

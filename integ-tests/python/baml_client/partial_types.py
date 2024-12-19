@@ -324,8 +324,8 @@ class TestClassWithEnum(BaseModel):
     prop2: Optional[types.EnumInClass] = None
 
 class TestOutputClass(BaseModel):
-    prop1: StreamState[Optional[str]]
-    prop2: Optional[int] = None
+    prop1: Optional[str] = None
+    prop2: StreamState[Optional[int]]
 
 class Tree(BaseModel):
     data: Optional[int] = None

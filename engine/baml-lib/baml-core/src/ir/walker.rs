@@ -272,11 +272,11 @@ impl<'a> Walker<'a, &'a Class> {
     }
 
     pub fn streaming_done(&self) -> bool {
-        self.item.attributes.get("streaming::done").is_some()
+        self.item.attributes.get("stream.done").is_some()
     }
 
     pub fn streaming_state(&self) -> bool {
-        self.item.attributes.get("streaming::state").is_some()
+        self.item.attributes.get("stream.with_state").is_some()
     }
 
     pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
@@ -411,15 +411,15 @@ impl<'a> Walker<'a, &'a Field> {
     }
 
     pub fn streaming_done(&self) -> bool {
-        self.item.attributes.get("streaming::done").is_some()
+        self.item.attributes.get("stream.done").is_some()
     }
 
     pub fn streaming_needed(&self) -> bool {
-        self.item.attributes.get("streaming::needed").is_some()
+        self.item.attributes.get("stream.not_null").is_some()
     }
 
     pub fn streaming_state(&self) -> bool {
-        self.item.attributes.get("streaming::state").is_some()
+        self.item.attributes.get("stream.with_state").is_some()
     }
 
     pub fn span(&self) -> Option<&crate::Span> {

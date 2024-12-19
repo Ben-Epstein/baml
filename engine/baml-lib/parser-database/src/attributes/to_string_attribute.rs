@@ -37,19 +37,19 @@ pub(super) fn visit(ctx: &mut Context<'_>, span: &Span, as_block: bool) -> Optio
         ctx.validate_visited_arguments();
     }
 
-    if ctx.visit_optional_single_attr("streaming::done") {
+    if ctx.visit_optional_single_attr("stream.done") {
         attributes.streaming_done = Some(true);
         modified = true;
         ctx.validate_visited_arguments();
     }
 
-    if ctx.visit_optional_single_attr("streaming::needed") {
+    if ctx.visit_optional_single_attr("stream.not_null") {
         attributes.streaming_needed = Some(true);
         modified = true;
         ctx.validate_visited_arguments();
     }
 
-    if ctx.visit_optional_single_attr("streaming::state") {
+    if ctx.visit_optional_single_attr("stream.with_state") {
         attributes.streaming_state = Some(true);
         modified = true;
         ctx.validate_visited_arguments();

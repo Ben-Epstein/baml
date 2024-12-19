@@ -295,3 +295,56 @@ impl ToTypeReferenceInClientDefinition for FieldType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use internal_baml_core::ir::repr::make_test_ir;
+
+    use crate::GeneratorArgs;
+
+    use super::*;
+
+    fn mk_ir() -> IntermediateRepr {
+        make_test_ir(r#"
+class Bar {
+  i int @stream.not_null
+}
+
+class Foo {
+//   i int @stream.with_state
+  b Bar @stream.done
+}
+
+// class Foo {
+//   str string @stream.with_state
+// }
+//
+// class Inner {
+//   inner_int int
+//   inner_string string @stream.not_null
+//   inner_string_2 string @stream.not_null @stream.done
+// }
+//
+// class InnerDone {
+//   inner_done_inner Inner @stream.done
+//   inner_done_int int
+//   inner_done_str string
+//   @@stream.done
+// }
+        "#).unwrap()
+    }
+
+    fn mk_gen() -> GeneratorArgs {
+        GeneratorArgs::new("baml_client", "baml_src", vec![], "no_version".to_string(), true, GeneratorDefaultClientMode::Async, Vec::new()).unwrap()
+    }
+
+    #[test]
+    fn generate_streaming_python() {
+        let ir = mk_ir();
+        let generator_args = mk_gen();
+        let res = generate(&ir, &generator_args).unwrap();
+        let partial_types = res.get(&PathBuf::from("partial_types.py")).unwrap();
+        eprintln!("{}", partial_types);
+        assert!(false);
+    }
+}

@@ -278,7 +278,7 @@ are always valid within your own semantics.
   - `@stream.not_null`: Marks a field to indicate that the class containing
      that field should only be streamed if that field is present (the field needed
      not be completed)
-  - `@streaming::state`: Adds metadata to a type indicating whether types appearing
+  - `@stream.with_state`: Adds metadata to a type indicating whether types appearing
     
 ### `@stream.done`
 
@@ -348,10 +348,10 @@ is about the type itself, and `@stream.not_null` is about the type's
 containing context.
 </Tip>
 
-### `@streaming::state`
+### `@stream.with_state`
 
 It is often useful to know in client code whether a value is finished, or
-could be updated in future messages. The `@streaming::state` attribute lets
+could be updated in future messages. The `@stream.with_state` attribute lets
 you attach metadata to types to indicate this state in client code.
 
 <Tabs>
@@ -360,7 +360,7 @@ you attach metadata to types to indicate this state in client code.
 class Message {
   message_type "greeting" | "within-convo" | "farewell" @stream.not_null
   gesture ("gesticulate" | "wave" | "shake-hands" | "hug")?
-  message string @streaming::state
+  message string @stream.with_state
 }
 ```
 </Tab>
@@ -419,7 +419,7 @@ class Recommendation {
 
 class Message {
   message_type "greeting" | "conversation" | "farewell" @stream.not_null
-  message string @streaming::state @stream.not_null
+  message string @stream.with_state @stream.not_null
 }
 
 function Respond(

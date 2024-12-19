@@ -1,5 +1,5 @@
 class TestOutputClass {
-  prop1 string @description("A long string with about 20 words") @stream.done @stream.with_state
+  prop1 string @description("A long string with about 200 words") @stream.done @stream.with_state
   prop2 int @stream.with_state
 }
 

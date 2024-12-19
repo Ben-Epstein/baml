@@ -39,7 +39,7 @@ pub fn validate_streaming_state(
 /// Consider a node's type, streaming state, and streaming behavior annotations. Return
 /// an error if streaming state doesn't meet the streaming requirements. Also attach
 /// the streaming state to the node as metadata, if this was requested by the user
-/// vial `@streaming::state`.
+/// vial `@stream.with_state`.
 ///
 /// This function descends into child nodes, when the argument is a compound value.
 fn process_node(
@@ -131,7 +131,7 @@ fn process_node(
 }
 
 /// For a given type, assume that it is a class, and list the fields of that
-/// class that were marked `@streaming::needed`.
+/// class that were marked `@stream.not_null`.
 /// The parameter must have already been passed through `distribute_metadata`,
 /// it's an error to call this function with undistributed metadata.
 fn needed_fields(
