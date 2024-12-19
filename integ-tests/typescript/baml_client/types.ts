@@ -207,6 +207,12 @@ export interface ClassOptionalOutput2 {
   
 }
 
+export interface ClassWithDone {
+  sixteen_digit_number: number
+  string_with_twenty_words: string
+  
+}
+
 export interface ClassWithImage {
   myImage: Image
   param2: string

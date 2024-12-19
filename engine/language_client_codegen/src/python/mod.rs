@@ -311,7 +311,7 @@ class Bar {
 }
 
 class Foo {
-//   i int @stream.with_state
+  i int @stream.not_null @stream.with_state
   b Bar @stream.done
 }
 

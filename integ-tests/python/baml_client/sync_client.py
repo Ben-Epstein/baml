@@ -1427,6 +1427,29 @@ class BamlSyncClient:
       )
       return cast(Checked[types.BlockConstraint,types.Literal["cross_field"]], raw.cast_to(types, types))
     
+    def MakeClassWithDone(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> types.ClassWithDone:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.call_function_sync(
+        "MakeClassWithDone",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(types.ClassWithDone, raw.cast_to(types, types))
+    
     def MakeNestedBlockConstraint(
         self,
         
@@ -4576,6 +4599,35 @@ class BamlStreamClient:
         raw,
         lambda x: cast(Checked[partial_types.BlockConstraint,types.Literal["cross_field"]], x.cast_to(types, partial_types)),
         lambda x: cast(Checked[types.BlockConstraint,types.Literal["cross_field"]], x.cast_to(types, types)),
+        self.__ctx_manager.get(),
+      )
+    
+    def MakeClassWithDone(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.ClassWithDone, types.ClassWithDone]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function_sync(
+        "MakeClassWithDone",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.ClassWithDone, types.ClassWithDone](
+        raw,
+        lambda x: cast(partial_types.ClassWithDone, x.cast_to(types, partial_types)),
+        lambda x: cast(types.ClassWithDone, x.cast_to(types, types)),
         self.__ctx_manager.get(),
       )
     

@@ -28,6 +28,7 @@ module Baml
     class BookOrder < T::Struct; end
     class ClassOptionalOutput < T::Struct; end
     class ClassOptionalOutput2 < T::Struct; end
+    class ClassWithDone < T::Struct; end
     class ClassWithImage < T::Struct; end
     class CompoundBigNumbers < T::Struct; end
     class ContactInfo < T::Struct; end
@@ -202,6 +203,20 @@ module Baml
           prop1: props[:prop1],
           prop2: props[:prop2],
           prop3: props[:prop3],
+        )
+
+        @props = props
+      end
+    end
+    class ClassWithDone < T::Struct
+      include Baml::Sorbet::Struct
+      const :sixteen_digit_number, T.nilable(Integer)
+      const :string_with_twenty_words, T.nilable(String)
+
+      def initialize(props)
+        super(
+          sixteen_digit_number: props[:sixteen_digit_number],
+          string_with_twenty_words: props[:string_with_twenty_words],
         )
 
         @props = props

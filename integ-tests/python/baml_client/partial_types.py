@@ -69,6 +69,10 @@ class ClassOptionalOutput2(BaseModel):
     prop2: Optional[str] = None
     prop3: Optional["Blah"] = None
 
+class ClassWithDone(BaseModel):
+    sixteen_digit_number: Optional[int] = None
+    string_with_twenty_words: Optional[str] = None
+
 class ClassWithImage(BaseModel):
     myImage: Optional[baml_py.Image] = None
     param2: Optional[str] = None

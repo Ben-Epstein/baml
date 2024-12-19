@@ -2,7 +2,7 @@ import uuid
 import json
 import os
 import time
-from typing import List
+from typing import List, Optional
 import pytest
 from assertpy import assert_that
 from dotenv import load_dotenv
@@ -1522,3 +1522,31 @@ async def test_block_constraint_arguments():
         nested_block_constraint = NestedBlockConstraintForParam(nbcfp=block_constraint)
         await b.UseNestedBlockConstraint(nested_block_constraint)
     assert "Failed assert: hi" in str(e)
+
+@pytest.mark.asyncio
+async def test_semantic_streaming():
+    stream = b.stream.MakeClassWithDone()
+
+    # We will use these to store streaming fields and check them
+    # for stability.
+    reference_string: Optional[str] = None
+    reference_int: Optional[int] = None
+    async for msg in stream:
+        assert "string_with_twenty_words" in dict(msg)
+        assert "sixteen_digit_number" in dict(msg)
+        if msg.sixteen_digit_number is not None:
+            if reference_int is None:
+                # Set the reference if it hasn't been set yet.
+                reference_int = msg.sixteen_digit_number
+            else:
+                # If the reference has been set, check that the
+                # current value matches it.
+                assert reference_int == msg.sixteen_digit_number
+        if msg.string_with_twenty_words is not None:
+            if reference_string is None:
+                # Set the reference if it hasn't been set yet.
+                reference_string = msg.string_with_twenty_words
+            else:
+                # If the reference has been set, check that the
+                # current value matches it.
+                assert reference_string == msg.string_with_twenty_words
