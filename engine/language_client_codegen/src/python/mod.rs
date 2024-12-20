@@ -306,14 +306,18 @@ mod tests {
 
     fn mk_ir() -> IntermediateRepr {
         make_test_ir(r#"
-class Bar {
-  i int @stream.not_null
+class Greg {
+  inner Foo? @stream.not_null @stream.with_state @check(foo, {{ true }})
 }
 
 class Foo {
-  i int @stream.not_null @stream.with_state
-  b Bar @stream.done
+  s string
 }
+
+// class Foo {
+//   i int @stream.not_null @stream.with_state
+//   b Bar @stream.done
+// }
 
 // class Foo {
 //   str string @stream.with_state

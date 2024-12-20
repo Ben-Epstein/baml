@@ -207,9 +207,19 @@ export interface ClassOptionalOutput2 {
   
 }
 
+export interface ClassWithBlockDone {
+  i_16_digits: number
+  s_20_words: string
+  
+}
+
 export interface ClassWithDone {
   sixteen_digit_number: number
   string_with_twenty_words: string
+  class_1: ClassWithoutDone
+  class_2: ClassWithBlockDone
+  class_done_needed: ClassWithBlockDone
+  class_needed: ClassWithoutDone
   
 }
 
@@ -217,6 +227,12 @@ export interface ClassWithImage {
   myImage: Image
   param2: string
   fake_image: FakeImage
+  
+}
+
+export interface ClassWithoutDone {
+  i_16_digits: number
+  s_20_words: string
   
 }
 

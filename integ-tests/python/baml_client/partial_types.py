@@ -69,14 +69,26 @@ class ClassOptionalOutput2(BaseModel):
     prop2: Optional[str] = None
     prop3: Optional["Blah"] = None
 
+class ClassWithBlockDone(BaseModel):
+    i_16_digits: Optional[int] = None
+    s_20_words: Optional[str] = None
+
 class ClassWithDone(BaseModel):
     sixteen_digit_number: Optional[int] = None
     string_with_twenty_words: Optional[str] = None
+    class_1: Optional["types.ClassWithoutDone"] = None
+    class_2: Optional["types.ClassWithBlockDone"] = None
+    class_done_needed: "types.ClassWithBlockDone"
+    class_needed: "ClassWithoutDone"
 
 class ClassWithImage(BaseModel):
     myImage: Optional[baml_py.Image] = None
     param2: Optional[str] = None
     fake_image: Optional["FakeImage"] = None
+
+class ClassWithoutDone(BaseModel):
+    i_16_digits: Optional[int] = None
+    s_20_words: Optional[str] = None
 
 class CompoundBigNumbers(BaseModel):
     big: Optional["BigNumbers"] = None

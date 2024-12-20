@@ -149,22 +149,20 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                 .static_fields
                 .iter()
                 .map(|f| {
-                    // For plain fields, use to_partial_type_ref directly.
-                    let plain_field = add_default_value(
-                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false, false));
                     // Fields with @stream.done should take their type from
-                    let done_field = add_default_value(
-                        &optional(&f.elem.r#type.elem.to_type_ref(c.db, true))
-                    );
-                    let needed_field = add_default_value(
-                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false, true));
                     let needed: bool = f.attributes.get("stream.not_null").is_some();
                     let done: bool = f.elem.r#type.elem.streaming_behavior().done;
                     let field = match (done, needed) {
-                        (false, false) => plain_field,
-                        (true, false) => done_field,
-                        (false, true) => needed_field,
-                        (true, true) => done_field, // TODO: Fix.
+                        // A normal partial field.
+                        (false, false) => add_default_value(
+                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false, false)),
+                        // A field with @stream.done and no @stream.not_null
+                        (true, false) => add_default_value(
+                            &optional(&f.elem.r#type.elem.to_type_ref(c.db, true))
+                        ),
+                        (false, true) => add_default_value(
+                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false, true)),
+                        (true, true) => f.elem.r#type.elem.to_type_ref(c.db, true), // TODO: Fix.
                     };
                     (
                         f.elem.name.as_str(),
@@ -277,13 +275,13 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         let use_module_prefix = !is_partial_type;
         let with_state = metadata.1.state;
         let constraints = metadata.0;
+        let module_prefix = if is_partial_type { "" } else { "types." };
         let base_rep = match base_type {
             FieldType::Class(name) => {
-              let import_prefix = if is_partial_type { "" } else { "types." };
                 if wrapped || needed {
-                    format!("\"{import_prefix}{name}\"")
+                    format!("\"{module_prefix}{name}\"")
                 } else {
-                    format!("Optional[\"{import_prefix}{name}\"]")
+                    format!("Optional[\"{module_prefix}{name}\"]")
                 }
             }
             FieldType::Enum(name) => {
@@ -346,9 +344,12 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         let base_type_ref = if is_partial_type {
             base_rep
         } else {
-            base_type.to_type_ref(ir, use_module_prefix)
+            if needed {
+                base_type.to_type_ref(ir, use_module_prefix)
+            } else {
+                base_rep
+            }
         };
-        dbg!(&base_type_ref);
         let rep_with_checks = match field_type_attributes(self) {
           Some(checks) => {
             let checks_type_ref = type_name_for_checks(&checks);
@@ -356,14 +357,11 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
           },
           None => base_type_ref
         };
-        dbg!(&rep_with_checks);
         let rep_with_stream_state = if with_state {
           stream_state(&rep_with_checks)
         } else {
           rep_with_checks
         };
-        dbg!(&self);
-        dbg!(&rep_with_stream_state);
         rep_with_stream_state
     }
 }

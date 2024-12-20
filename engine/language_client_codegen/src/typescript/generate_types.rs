@@ -26,6 +26,12 @@ pub(crate) struct TypescriptTypes<'ir> {
     classes: Vec<TypescriptClass<'ir>>,
 }
 
+#[derive(askama::Template)]
+#[template(path = "partial_types.ts.j2", escape = "none")]
+pub(crate) struct TypescriptStreamTypes<'ir> {
+    partial_classes: Vec<PartialTypescriptClass<'ir>>,
+}
+
 struct TypescriptEnum<'ir> {
     pub name: &'ir str,
     pub values: Vec<(&'ir str, Option<String>)>,
@@ -38,6 +44,13 @@ pub struct TypescriptClass<'ir> {
     pub fields: Vec<(Cow<'ir, str>, bool, String, Option<String>)>,
     pub dynamic: bool,
     pub docstring: Option<String>,
+}
+
+pub struct PartialTypescriptClass<'ir> {
+    name: Cow<'ir, str>,
+    fields: Vec<(Cow<'ir, str>, bool, String, Option<String>)>,
+    dynamic: bool,
+    docstring: Option<String>,
 }
 
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTypes<'ir> {
@@ -54,6 +67,21 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTyp
             classes: ir
                 .walk_classes()
                 .map(|e| Into::<TypescriptClass>::into(&e))
+                .collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptStreamTypes<'ir> {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (ir, _): (&'ir IntermediateRepr, &'ir GeneratorArgs),
+    ) -> Result<TypescriptStreamTypes<'ir>> {
+        Ok(TypescriptStreamTypes {
+            partial_classes: ir
+                .walk_classes()
+                .map(|e| Into::<PartialTypescriptClass>::into(e))
                 .collect::<Vec<_>>(),
         })
     }
@@ -117,11 +145,42 @@ impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
                     (
                         Cow::Borrowed(f.elem.name.as_str()),
                         f.elem.r#type.elem.is_optional(),
-                        f.elem.r#type.elem.to_type_ref(c.db),
+                        f.elem.r#type.elem.to_type_ref(c.db, false),
                         f.elem.docstring.as_ref().map(|d| render_docstring(d, true)),
                     )
                 })
                 .collect(),
+            docstring: c
+                .item
+                .elem
+                .docstring
+                .as_ref()
+                .map(|d| render_docstring(d, false)),
+        }
+    }
+}
+
+impl<'ir> From<ClassWalker<'ir>> for PartialTypescriptClass<'ir> {
+    fn from(c: ClassWalker<'ir>) -> PartialTypescriptClass<'ir> {
+        PartialTypescriptClass {
+            name: Cow::Borrowed(c.name()),
+            dynamic: c.item.attributes.get("dynamic_type").is_some(),
+            fields: c.item.elem.static_fields.iter().map(|f| {
+                let needed: bool = f.attributes.get("stream.not_null").is_some();
+                let done: bool = f.elem.r#type.elem.streaming_behavior().done;
+                let (field, optional) = match (done, needed) {
+                    (false, false) => f.elem.r#type.elem.to_partial_type_ref(c.db, false),
+                    (true, false) => (f.elem.r#type.elem.to_type_ref(c.db, true), false),
+                    (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.db, true),
+                    (true, true) => (f.elem.r#type.elem.to_type_ref(c.db, true), false),
+                };
+                (
+                    Cow::Borrowed(f.elem.name.as_str()),
+                    optional,
+                    field,
+                    f.elem.docstring.as_ref().map(|d| render_docstring(d, true)),
+                )
+            }).collect(),
             docstring: c
                 .item
                 .elem
@@ -144,7 +203,7 @@ pub fn type_name_for_checks(checks: &TypeCheckAttributes) -> String {
 /// Render the BAML documentation (a bare string with padding stripped)
 /// into a TS docstring.
 /// (Optionally indented and formatted as a TS block comment).
-fn render_docstring(d: &Docstring, indented: bool) -> String {
+pub fn render_docstring(d: &Docstring, indented: bool) -> String {
     if indented {
         let lines = d.0.as_str().replace("\n", "\n   * ");
         format!("/**\n   * {lines}\n   */")
