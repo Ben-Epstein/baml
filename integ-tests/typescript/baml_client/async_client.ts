@@ -4143,7 +4143,7 @@ class BamlStreamClient {
   FnEnumListOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<(EnumOutput | null[], EnumOutput[]> {
+  ): BamlStream<(EnumOutput | null)[], EnumOutput[]> {
     try {
       const raw = this.runtime.streamFunction(
         "FnEnumListOutput",
@@ -4155,9 +4155,9 @@ class BamlStreamClient {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       )
-      return new BamlStream<(EnumOutput | null[], EnumOutput[]>(
+      return new BamlStream<(EnumOutput | null)[], EnumOutput[]>(
         raw,
-        (a): a is (EnumOutput | null[] => a,
+        (a): a is (EnumOutput | null)[] => a,
         (a): a is EnumOutput[] => a,
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -4935,7 +4935,7 @@ class BamlStreamClient {
   LiteralUnionsTest(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<(1? | true? | "string output"?), 1 | true | "string output"> {
+  ): BamlStream<(1 | true | "string output"), 1 | true | "string output"> {
     try {
       const raw = this.runtime.streamFunction(
         "LiteralUnionsTest",
@@ -4947,9 +4947,9 @@ class BamlStreamClient {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       )
-      return new BamlStream<(1? | true? | "string output"?), 1 | true | "string output">(
+      return new BamlStream<(1 | true | "string output"), 1 | true | "string output">(
         raw,
-        (a): a is (1? | true? | "string output"?) => a,
+        (a): a is (1 | true | "string output") => a,
         (a): a is 1 | true | "string output" => a,
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -4968,7 +4968,7 @@ class BamlStreamClient {
   MakeBlockConstraint(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<Checked<BlockConstraint,"cross_field", Checked<BlockConstraint,"cross_field">> {
+  ): BamlStream<Checked<BlockConstraint,"cross_field">, Checked<BlockConstraint,"cross_field">> {
     try {
       const raw = this.runtime.streamFunction(
         "MakeBlockConstraint",
@@ -4980,9 +4980,9 @@ class BamlStreamClient {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       )
-      return new BamlStream<Checked<BlockConstraint,"cross_field", Checked<BlockConstraint,"cross_field">>(
+      return new BamlStream<Checked<BlockConstraint,"cross_field">, Checked<BlockConstraint,"cross_field">>(
         raw,
-        (a): a is Checked<BlockConstraint,"cross_field" => a,
+        (a): a is Checked<BlockConstraint,"cross_field"> => a,
         (a): a is Checked<BlockConstraint,"cross_field"> => a,
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -5166,7 +5166,7 @@ class BamlStreamClient {
   PredictAgeBare(
       inp: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<Checked<number,"too_big", Checked<number,"too_big">> {
+  ): BamlStream<Checked<number,"too_big">, Checked<number,"too_big">> {
     try {
       const raw = this.runtime.streamFunction(
         "PredictAgeBare",
@@ -5178,9 +5178,9 @@ class BamlStreamClient {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       )
-      return new BamlStream<Checked<number,"too_big", Checked<number,"too_big">>(
+      return new BamlStream<Checked<number,"too_big">, Checked<number,"too_big">>(
         raw,
-        (a): a is Checked<number,"too_big" => a,
+        (a): a is Checked<number,"too_big"> => a,
         (a): a is Checked<number,"too_big"> => a,
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),

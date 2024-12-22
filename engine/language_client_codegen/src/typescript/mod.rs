@@ -242,17 +242,13 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     if needed {
                         (format!("types.{name}"), false)
                     } else {
-                        (format!("({name} | null"), true)
+                        (format!("({name} | null)"), true)
                     }
                 };
                 res
             }
             FieldType::Literal(value) => {
-                if needed {
-                    (value.to_string(), false)
-                } else {
-                    (format!("{}?", value.to_string()), true)
-                }
+                (value.to_string(), false)
             }
             FieldType::List(inner) => (
                 format!("{}[]", inner.to_partial_type_ref(ir, false).0),
@@ -320,7 +316,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
         let rep_with_checks = match field_type_attributes(self) {
             Some(checks) => {
                 let checks_type_ref = type_name_for_checks(&checks);
-                format!("Checked<{base_type_ref},{checks_type_ref}")
+                format!("Checked<{base_type_ref},{checks_type_ref}>")
             }
             None => base_type_ref,
         };
@@ -408,13 +404,26 @@ mod tests {
 
     fn mk_ir() -> IntermediateRepr {
         make_test_ir(
-            r#"
+            r##"
 class Greg {
   inner Foo? @stream.done @stream.not_null @stream.with_state @check(foo, {{ true }})
 }
 
 class Foo {
   s string
+}
+
+client<llm> GPT4 {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}  
+
+function MkFoo() -> Foo {
+  client GPT4
+  prompt #""#
 }
 
 // class Foo {
@@ -438,7 +447,7 @@ class Foo {
 //   inner_done_str string
 //   @@stream.done
 // }
-        "#,
+        "##,
         )
         .unwrap()
     }
@@ -463,6 +472,8 @@ class Foo {
         let res = generate(&ir, &generator_args).unwrap();
         let partial_types = res.get(&PathBuf::from("partial_types.ts")).unwrap();
         eprintln!("{}", partial_types);
+        let async_client = res.get(&PathBuf::from("async_client.ts")).unwrap();
+        eprintln!("{}", async_client);
         assert!(false);
     }
 }

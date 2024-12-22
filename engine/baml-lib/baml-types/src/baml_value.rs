@@ -4,6 +4,7 @@ use std::{
     fmt,
 };
 
+use anyhow::Result;
 use indexmap::IndexMap;
 use serde::ser::SerializeMap;
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
@@ -500,64 +501,59 @@ impl<T> BamlValueWithMeta<T> {
     /// 
     /// The baml value calling `zip_meta` is the "primary" one, whose value
     /// data will live on in the returned baml value.
-    pub fn zip_meta<U: Clone>(self, other: BamlValueWithMeta<U>) -> Option<BamlValueWithMeta<(T,U)>> {
+    pub fn zip_meta<U: Clone + std::fmt::Debug>(self, other: BamlValueWithMeta<U>) -> Result<BamlValueWithMeta<(T,U)>>
+    where T: std::fmt::Debug
+    {
         let other_meta: U = other.meta().clone();
+        let error_msg = format!("Could not unify {:?} with {:?}.", self, other);
         let ret = match (self, other) {
             (BamlValueWithMeta::Null(meta1), _) => {
-                BamlValueWithMeta::Null((meta1, other_meta))
+                Result::<_,_>::Ok(BamlValueWithMeta::Null((meta1, other_meta)))
             },
-            (BamlValueWithMeta::String(s1, meta1), BamlValueWithMeta::String(s2, meta2)) if s1 == s2 => BamlValueWithMeta::String(s1, (meta1, meta2)),
-            (BamlValueWithMeta::String(_,_), _) => return None,
-            (BamlValueWithMeta::Int(s1, meta1), BamlValueWithMeta::Int(s2, meta2)) if s1 == s2 => BamlValueWithMeta::Int(s1, (meta1, meta2)),
-            (BamlValueWithMeta::Int(_,_), _) => return None,
-            (BamlValueWithMeta::Float(s1, meta1), BamlValueWithMeta::Float(s2, meta2)) if s1 == s2 => BamlValueWithMeta::Float(s1, (meta1, meta2)),
-            (BamlValueWithMeta::Float(_,_), _) => return None,
-            (BamlValueWithMeta::Bool(s1, meta1), BamlValueWithMeta::Bool(s2, meta2)) if s1 == s2 => BamlValueWithMeta::Bool(s1, (meta1, meta2)),
-            (BamlValueWithMeta::Bool(_,_), _) => return None,
+            (BamlValueWithMeta::String(s1, meta1), BamlValueWithMeta::String(s2, meta2)) if s1 == s2 => Ok(BamlValueWithMeta::String(s1, (meta1, meta2))),
+            (BamlValueWithMeta::String(_,_), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::Int(s1, meta1), BamlValueWithMeta::Int(s2, meta2)) if s1 == s2 => Ok(BamlValueWithMeta::Int(s1, (meta1, meta2))),
+            (BamlValueWithMeta::Int(_,_), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::Float(s1, meta1), BamlValueWithMeta::Float(s2, meta2)) if s1 == s2 => Ok(BamlValueWithMeta::Float(s1, (meta1, meta2))),
+            (BamlValueWithMeta::Float(_,_), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::Bool(s1, meta1), BamlValueWithMeta::Bool(s2, meta2)) if s1 == s2 => Ok(BamlValueWithMeta::Bool(s1, (meta1, meta2))),
+            (BamlValueWithMeta::Bool(_,_), _) => anyhow::bail!("Unification error"),
             (BamlValueWithMeta::Map(mut s1, meta1), BamlValueWithMeta::Map(mut s2, meta2)) => {
                 s1.sort_unstable_keys();
                 s2.sort_unstable_keys();
                 let map_result = s1.into_iter().zip(s2).map(|((k1,v1), (_k2,v2))| {
                     v1.zip_meta(v2).map(|res| (k1, res))
-                }).collect::<Option<IndexMap<_, _>>>();
-                match map_result {
-                    None => return None,
-                    Some(r) => BamlValueWithMeta::Map(r, (meta1, meta2))
-                }
+                }).collect::<Result<IndexMap<_, _>>>()?;
+                Ok(BamlValueWithMeta::Map(map_result, (meta1, meta2)))
             },
-            (BamlValueWithMeta::Map(_,_), _) => return None,
+            (BamlValueWithMeta::Map(_,_), _) => anyhow::bail!("Unification error"),
             (BamlValueWithMeta::List(l1, meta1), BamlValueWithMeta::List(l2, meta2)) => {
                 let list_result = l1.into_iter().zip(l2).map(|(item1, item2)| {
                     item1.zip_meta(item2)
-                }).collect::<Option<Vec<_>>>();
-                match list_result {
-                    None => return None,
-                    Some(r) => BamlValueWithMeta::List(r, (meta1, meta2))
-                }
+                }).collect::<Result<Vec<_>>>()?;
+                Ok( BamlValueWithMeta::List(list_result, (meta1, meta2)))
+                
             }
-            (BamlValueWithMeta::List(_,_), _) => return None,
+            (BamlValueWithMeta::List(_,_), _) => anyhow::bail!("Unification error"),
             (BamlValueWithMeta::Media(m1, meta1), BamlValueWithMeta::Media(m2, meta2)) if m1 == m2 => {
-                BamlValueWithMeta::Media(m1, (meta1, meta2))
+                Ok(BamlValueWithMeta::Media(m1, (meta1, meta2)))
             }
-            (BamlValueWithMeta::Media(_, _), _) => return None,
+            (BamlValueWithMeta::Media(_, _), _) => anyhow::bail!("Unification error"),
             (BamlValueWithMeta::Enum(x1, y1, meta1), BamlValueWithMeta::Enum(x2, y2, meta2)) if x1 == x2 && y1 == y2 => {
-                BamlValueWithMeta::Enum(x1, y1, (meta1, meta2))
+                Ok(BamlValueWithMeta::Enum(x1, y1, (meta1, meta2)))
             }
-            (BamlValueWithMeta::Enum(_, _, _), _) => return None,
+            (BamlValueWithMeta::Enum(_, _, _), _) => anyhow::bail!("Unification error"),
             (BamlValueWithMeta::Class(name1, mut fields1, meta1), BamlValueWithMeta::Class(name2, mut fields2, meta2)) if name1 == name2 => {
                 fields1.sort_unstable_keys();
                 fields2.sort_unstable_keys();
                 let map_result = fields1.into_iter().zip(fields2).map(|((k1,v1),(_k2,v2))| {
                     v1.zip_meta(v2).map(|r| (k1, r))
-                }).collect::<Option<IndexMap<_,_>>>();
-                match map_result {
-                    None => return None,
-                    Some(r) => BamlValueWithMeta::Class(name1, r, (meta1, meta2))
-                }
+                }).collect::<Result<IndexMap<_,_>>>()?;
+                Ok(BamlValueWithMeta::Class(name1, map_result, (meta1, meta2)))
             }
-            (BamlValueWithMeta::Class(_, _, _), _) => return None,
+            (BamlValueWithMeta::Class(_, _, _), _) => anyhow::bail!("Unification error"),
         };
-        Some(ret)
+        ret.map_err(|_: anyhow::Error| anyhow::anyhow!(error_msg))
     }
 }
 
